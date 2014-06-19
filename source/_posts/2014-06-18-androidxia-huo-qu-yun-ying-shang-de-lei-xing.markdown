@@ -3,7 +3,7 @@ layout: post
 title: "Android下获取运营商的类型"
 date: 2014-06-18 17:27:50 +0800
 comments: true
-categories: 
+categories: android
 ---
 
 ####大家熟知的国内三大运营商：移动、联通、电信
@@ -14,6 +14,7 @@ categories:
 
    * 我们在列举支付方式时，如何根据当前SIM来判断应该采用那个运营商的支付方式？
    
+<!--more-->
 
 #####解决方式(代码如下):
 ```java

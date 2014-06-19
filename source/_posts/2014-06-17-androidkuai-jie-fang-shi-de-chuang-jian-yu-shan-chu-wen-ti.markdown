@@ -17,6 +17,7 @@ categories: android
    * 通过在创建快捷方式时，设置shortcutIntent.putExtra("duplicate", false);会避免重复创建
    * 但是会在已存在快捷方式时出现 “该快捷方式已存在”的toast。
 
+<!--more-->
 ####解决思路：
 
   1. 修改编译源码（pass掉）

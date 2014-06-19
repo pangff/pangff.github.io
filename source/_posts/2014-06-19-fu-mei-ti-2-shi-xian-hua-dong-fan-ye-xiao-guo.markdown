@@ -3,7 +3,7 @@ layout: post
 title: "富媒体2-实现滑动翻页效果"
 date: 2014-06-19 15:22:56 +0800
 comments: true
-categories: true
+categories: android
 ---
 实现了图文混排<http://www.easymorse.com/index.php/archives/1464>，现在我们打算实现WebView上每一栏作为一页的滑动翻页效果，而不是简单的通过滚动的滑动来浏览后面的内容。
 <!--more-->

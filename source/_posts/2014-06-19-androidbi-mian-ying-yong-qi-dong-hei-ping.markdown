@@ -15,12 +15,12 @@ Android如果不做特殊处理启动时都会先出现一个黑(或白，这个
 
 添加自定义style
 
-```java
+```xml
 
-<stylename="Theme.Start"parent="android:Theme"]] > 
+<style name="Theme.Start" parent="android:Theme" > 
   <itemname="android:windowBackground">@drawable/splash</item> 
   <itemname="android:windowNoTitle">true</item> 
-</style]] > 
+</style> 
 ```
 
 在AndroidManifest.xml文件中的启动Activity中将其以theme引入
@@ -28,19 +28,19 @@ Android如果不做特殊处理启动时都会先出现一个黑(或白，这个
 作为theme加入到启动activity中
 
 
-```java
+```xml
 
 <activity
    android:name="com.jhss.youguu.LoadImageActivity"
    android:launchMode="singleTop"
    android:theme="@style/Theme.Start"
    android:screenOrientation="portrait"
-   android:windowSoftInputMode="adjustPan"]] > 
-      <intent-filter]] > 
+   android:windowSoftInputMode="adjustPan" > 
+      <intent-filter> 
          <actionandroid:name="android.intent.action.MAIN"/>
          <categoryandroid:name="android.intent.category.LAUNCHER"/>
-     </intent-filter]] > 
-</activity]] >
+     </intent-filter > 
+</activity >
 ``` 
 
 最后，将启动Activity的布局xml背景去掉（如果不去掉一方面会背景冗余，另一方面作为theme的背景和作为layout的背景不能完全重叠，非纯色背景页面会有跳动感）

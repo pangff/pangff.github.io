@@ -10,6 +10,7 @@ categories: android
 ![](http://www.pffair.com/images/12.png)
 
 而在横屏的时候呢？
+<!--more-->
 
 ![](http://www.pffair.com/images/13.png)
 

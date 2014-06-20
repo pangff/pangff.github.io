@@ -2,11 +2,13 @@
 #      Main Configs       #
 # ----------------------- #
 
-url: https://github.com/pangff/pangff.github.io
+url: https://pangff.github.io
 title: Pangff's Blog
 subtitle: stay foolish stay hungry.
 author: 庞飞飞
-simple_search: https://www.google.com/search
+simple_search: http://www.pffair.com/search
+tapir_token: 53a38b9f3c05bc0200000000
+# lunr_search: true
 description:
 
 # Default date format is "ordinal" (resulting in "July 22nd 2007")

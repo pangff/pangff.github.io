@@ -1,0 +1,18 @@
+---
+layout: page
+---
+<h1 class="entry-title"><center>Search Results</center></h1>
+<div id="search_loading" style="margin: 40px 0">
+    <center><img src="/images/loading.gif"></center>
+</div>
+
+<script type="text/javascript" src="/javascripts/jquery-tapir.js"></script>
+<div id="search_results" style="display:none">
+<br>
+</div>
+<script>
+         $('#search_results').tapir({
+             'token': '53a38b9f3c05bc0200000000',
+             'complete' : function() { document.getElementById('search_loading').style.display="none"; }
+         });
+</script>

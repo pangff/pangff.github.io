@@ -9,15 +9,15 @@ categories: android
 做androidk开发的盆友们都知道可以通过ColorSpan、Html.from("html标签")的方式为TextView中的部分文字改变颜色，或者改变背景。但是如果要给TextView文字末尾拼接带本地图片背景的文字改如何实现呢？（比如添加一个带圆角背景的更多文字）
 <!--more-->
 
-####思路：
+###思路：
  * 查看TextView是否可以在中文中插入图片
  * 如果可以，那么将文字内容和背景图片合并成一个图片
  * 将合成图片插入正文
 
-####实现：
+###实现：
 
 
-######TextView中插入图片,
+####TextView中插入图片,
 
 ```java
 textView = (TextView) findViewById(R.id.text);
@@ -41,7 +41,7 @@ textView.setText(Html.fromHtml("我要添加一个<img src=\""+R.drawable.ic_lau
 
 
 
-######文字和背景合并插入正文中
+####文字和背景合并插入正文中
 
 自定义TextDrawable，将文字内容传入，用canvas将文字和绘制的圆角矩形合并（本地图片同理）
 
@@ -79,5 +79,5 @@ textView.setText(Html.fromHtml("在上篇笔记中介绍了使用Rajawali加载�
 
 ![效果图](http://www.pffair.com/images/29.png)
 
-####参考项目
+###参考项目
 	https://github.com/pangff/textview_inline_drawable

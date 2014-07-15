@@ -20,7 +20,7 @@ categories: android
 ```java
 
 @Override
-publicbooleanonTouchEvent(MotionEvent event) {
+public boolean onTouchEvent(MotionEvent event) {
     switch(event.getAction()) {
         caseMotionEvent.ACTION_DOWN:
             downX = (int) event.getX();//纪录按下位置
@@ -42,7 +42,7 @@ publicbooleanonTouchEvent(MotionEvent event) {
 ```java
 
 @Override
-publicbooleanonTouchEvent(MotionEvent event) {
+public boolean onTouchEvent(MotionEvent event) {
     switch(event.getAction()) {
         caseMotionEvent.ACTION_DOWN:
             downX = (int) event.getX();
@@ -71,7 +71,7 @@ publicbooleanonTouchEvent(MotionEvent event) {
  * @param measureSpec
  * @return
  */
-privateintmeasureWidth(intmeasureSpec) {
+private int measureWidth(intmeasureSpec) {
     intresult =0;
     intspecMode = MeasureSpec.getMode(measureSpec);
     intspecSize = MeasureSpec.getSize(measureSpec);
@@ -99,7 +99,7 @@ privateintmeasureWidth(intmeasureSpec) {
  * 获取最大的滑动距离
  * @return
  */
-publicintgetMaxScrollX() {
+public int getMaxScrollX() {
     if(maxWidth - viewWidth >0) {
         return(maxWidth - viewWidth);
     }else{
@@ -115,7 +115,7 @@ publicintgetMaxScrollX() {
 /**
  * 对超出范围进行判断
  */
-publicvoidscrollBy(intdx,intdy) {
+public void scrollBy(intdx,intdy) {
     if(getScrollX() + dx > getMaxScrollX()) {//超出最大范围
         super.scrollBy(getMaxScrollX() - getScrollX(),0);
     }elseif(getScrollX() + dx <0) {//超出最小范围
@@ -132,7 +132,7 @@ publicvoidscrollBy(intdx,intdy) {
 
 ```java
 
-publicMyView(Context context, AttributeSet attrs) {
+public MyView(Context context, AttributeSet attrs) {
     super(context, attrs);
     initLabelView();
     this.flinger =newFlinger(context);
@@ -147,7 +147,7 @@ publicMyView(Context context, AttributeSet attrs) {
 ```java
 
 @Override
-publicbooleanonTouchEvent(MotionEvent event) {
+public boolean onTouchEvent(MotionEvent event) {
     if(velocityTracker ==null) {
         velocityTracker = VelocityTracker.obtain();// 初始化速度追踪器
     }
@@ -192,7 +192,7 @@ publicbooleanonTouchEvent(MotionEvent event) {
  * 控制滚动的线程
  * @author pangff
  */
-privateclassFlingerimplementsRunnable {
+private class Flinger implements Runnable {
 
 privatefinalScroller scroller;
 privateintlastX =0;

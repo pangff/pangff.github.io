@@ -33,9 +33,8 @@ private MyRenderer myRenderer;
  @Override
  public void onCreate(Bundle savedInstanceState) {
      super.onCreate(savedInstanceState);
-
-     myRenderer=new MyRenderer(this);
-     myRenderer.setSurfaceView(mSurfaceView);
+	 myRenderer=new MyRenderer(this);
+	 myRenderer.setSurfaceView(mSurfaceView);
      super.setRenderer(myRenderer);
  }
 ```

@@ -3,7 +3,7 @@ layout: post
 title: "Android View自定义专题二(View滑动的实现)"
 date: 2014-06-19 09:20:05 +0800
 comments: true
-categories: android
+categories: Android
 ---
 接着上一篇Android View自定义专题一 (view的绘制)，我们接下来要在上一篇的基础上为不能换行的textview加上横向滚动条，这里只说x方向滑动（y方向类似）。
 <!--more-->

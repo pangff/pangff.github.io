@@ -3,7 +3,7 @@ layout: post
 title: "Android View自定义专题一 (view的绘制)"
 date: 2014-06-19 08:58:44 +0800
 comments: true
-categories: android
+categories: Android
 ---
 
 项目中经常会有一些特殊的需求，而这些需求往往skd中的原生view控件不能或很难满足，这时候就需要我们自定义一些view来满足需求。

@@ -3,7 +3,7 @@ layout: post
 title: "Rajawali入门"
 date: 2014-06-19 16:05:10 +0800
 comments: true
-categories: android 3D
+categories: Android 3D
 ---
 rajawali是Android OpenGL ES 2.0/3.0引擎。https://github.com/MasDennis/Rajawali
 
@@ -43,7 +43,11 @@ private MyRenderer myRenderer;
 
 ####画个球
 
-如果参照当前官网turorial01，肯定是不行了，首先是已经没有DiffuseMaterial类了。另外，原文给的代码链接已经失效。必须找到https://github.com/MasDennis/RajawaliExamples，从这里找到需要的图和代码。
+如果参照当前官网turorial01，肯定是不行了，首先是已经没有DiffuseMaterial类了。另外，原文给的代码链接已经失效。必须找到
+
+	https://github.com/MasDennis/RajawaliExamples 
+
+从这里找到需要的图和代码。
 
 不过当前Examples项目使用的是Fragment，我转到自己简单的代码中，发现光效是无效的。索性在m2中暂时不加入光效。（光效是出不来的了，我测试了Examples项目，问题是一样的）。
 

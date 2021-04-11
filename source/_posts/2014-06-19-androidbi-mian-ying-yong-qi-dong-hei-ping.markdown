@@ -3,7 +3,7 @@ layout: post
 title: "Android避免应用启动黑屏"
 date: 2014-06-19 10:34:55 +0800
 comments: true
-categories: android
+categories: Android
 ---
 问题：
 Android如果不做特殊处理启动时都会先出现一个黑(或白，这个要根据应用theme决定)屏，这个闪屏的出现是因为Activity初始化需要时间(即使你的Activity简单到只渲染一个hello word)。为了增强体验如何去掉它呢？

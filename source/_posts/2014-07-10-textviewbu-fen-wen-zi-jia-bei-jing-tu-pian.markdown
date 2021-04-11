@@ -3,7 +3,7 @@ layout: post
 title: "Textview文字末尾拼接带本地图片背景文字"
 date: 2014-07-10 18:20:53 +0800
 comments: true
-categories: android
+categories: Android
 ---
 
 做androidk开发的盆友们都知道可以通过ColorSpan、Html.from("html标签")的方式为TextView中的部分文字改变颜色，或者改变背景。但是如果要给TextView文字末尾拼接带本地图片背景的文字改如何实现呢？（比如添加一个带圆角背景的更多文字）

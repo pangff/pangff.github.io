@@ -3,7 +3,7 @@ layout: post
 title: "Android下获取运营商的类型"
 date: 2014-06-18 17:27:50 +0800
 comments: true
-categories: android
+categories: Android
 ---
 
 ####大家熟知的国内三大运营商：移动、联通、电信

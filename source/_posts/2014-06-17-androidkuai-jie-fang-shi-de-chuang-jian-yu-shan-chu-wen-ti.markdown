@@ -3,7 +3,7 @@ layout: post
 title: "Android快捷方式的创建与删除问题"
 date: 2014-06-17 11:17:29 +0800
 comments: true
-categories: android
+categories: Android
 ---
 
 项目中遇到了对于桌面快捷方式的操作。

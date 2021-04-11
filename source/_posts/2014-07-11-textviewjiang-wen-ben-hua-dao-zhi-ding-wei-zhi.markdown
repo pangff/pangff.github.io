@@ -3,7 +3,7 @@ layout: post
 title: "Canvas将文本画到指定位置"
 date: 2014-07-11 19:07:06 +0800
 comments: true
-categories: android
+categories: Android
 ---
 经常会遇到使用Canvas绘制文字的情况，但是我们会发现使用canvas.drawText("string",x,y,paint)的时候画出的效果不是想象中按文字左上角坐标来的。那么文字位置究竟是怎么样的呢？
 <!--more-->

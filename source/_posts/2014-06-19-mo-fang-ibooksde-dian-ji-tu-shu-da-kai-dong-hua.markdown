@@ -3,7 +3,7 @@ layout: post
 title: "模仿iBooks的点击图书打开动画"
 date: 2014-06-19 11:32:10 +0800
 comments: true
-categories: android
+categories: Android
 ---
 ####先看下要实现的打开书动画的最终效果
 

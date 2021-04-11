@@ -3,7 +3,7 @@ layout: post
 title: "Widget 的简单使用"
 date: 2014-06-19 14:54:03 +0800
 comments: true
-categories: android
+categories: Android
 ---
 项目中用到了桌面小部件也就是widget，这里做下简单使用的总结
 最终实现的效果，如图

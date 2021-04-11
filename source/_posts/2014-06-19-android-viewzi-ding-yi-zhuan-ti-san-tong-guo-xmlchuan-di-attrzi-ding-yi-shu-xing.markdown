@@ -3,7 +3,7 @@ layout: post
 title: "Android View自定义专题三(通过xml传递attr自定义属性)"
 date: 2014-06-19 09:32:12 +0800
 comments: true
-categories: android
+categories: Android
 ---
 
 

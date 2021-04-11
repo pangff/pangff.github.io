@@ -3,7 +3,7 @@ layout: post
 title: "ActionBar上Tabs不折叠"
 date: 2014-06-19 11:50:07 +0800
 comments: true
-categories: android
+categories: Android
 ---
 用过ActionBar Tabs的同学应该都有遇到过这样的问题 如图，在竖屏的时候Tabs是展开显示的
 

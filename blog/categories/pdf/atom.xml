@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: pdf | Pangff's Blog]]></title>
+  <link href="http://www.pffair.com/blog/categories/pdf/atom.xml" rel="self"/>
+  <link href="http://www.pffair.com/"/>
+  <updated>2021-04-12T00:18:13+08:00</updated>
+  <id>http://www.pffair.com/</id>
+  <author>
+    <name><![CDATA[pangff]]></name>
+    <email><![CDATA[540688649@qq.com]]></email>
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Android打开pdf文件]]></title>
+    <link href="http://www.pffair.com/blog/2016/03/12/android-pdf/"/>
+    <updated>2016-03-12T17:54:51+08:00</updated>
+    <id>http://www.pffair.com/blog/2016/03/12/android-pdf</id>
+    <content type="html"><![CDATA[<p>项目中有个阅读pdf的需求，总结下几种方案</p>
+
+<!--more-->
+
+
+<h3>方案一：采用GoogleDocs</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>非常简单，而且可以直接通过webview打开线上pdf（不要忘记开启网络权限）</li>
+</ul>
+
+
+<pre><code class="java">
+@SuppressLint("SetJavaScriptEnabled")
+public void setDocumentPath(final String path) {
+    WebView webView = (WebView) findViewById(R.id.webview);
+    webView.getSettings().setJavaScriptEnabled(true);
+    webView.getSettings().setPluginsEnabled(true);
+    webView.loadUrl("https://docs.google.com/viewer?url=http://www.selab.isti.cnr.it/ws-mate/example.pdf");
+}
+</code></pre>
+
+<p>缺点：</p>
+
+<ul>
+<li>国内访问google你懂的</li>
+</ul>
+
+
+<p>当然也有解决方案：</p>
+
+<ul>
+<li>可以在自己的服务器做一个代理</li>
+</ul>
+
+
+<h3>方案二：将pdf的Intent抛出</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>也很简单，目前大部分Android设备貌似都有pdf阅读器</li>
+</ul>
+
+
+<pre><code class="java">
+File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath() +"/"+ filename);
+Intent target = new Intent(Intent.ACTION_VIEW);
+target.setDataAndType(Uri.fromFile(file),"application/pdf");
+target.setFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+
+Intent intent = Intent.createChooser(target, "Open File");
+try {
+    startActivity(intent);
+} catch (ActivityNotFoundException e) {
+    // Instruct the user to install a PDF reader here, or something
+}
+</code></pre>
+
+<p>缺点：</p>
+
+<ul>
+<li>不能在应用内打开，如果用户手机没有pdf阅读器就不行了</li>
+</ul>
+
+
+<p>方案三：使用Android PdfRenderer</p>
+
+<p>优势：</p>
+
+<ul>
+<li>应用内集成</li>
+</ul>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>不能滚动，只能单页，操作不方便</li>
+</ul>
+
+
+<h3>方案四：集成三方pdf sdk</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>应用内集成，有现成解决方案</li>
+</ul>
+
+
+<p>推荐三方sdk：</p>
+
+<ul>
+<li><a href="https://www.qoppa.com/android/pdfsdk/">https://www.qoppa.com/android/pdfsdk/</a>  使用了下demo感觉体验不是很好</li>
+<li><a href="https://code.google.com/archive/p/mupdf">https://code.google.com/archive/p/mupdf</a> 貌似需要编译</li>
+<li>当然还有比较不错的需要收费</li>
+</ul>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>应用包会变大，三方出现问题的话，不好调试</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>

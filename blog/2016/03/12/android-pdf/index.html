@@ -1,0 +1,321 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Android打开pdf文件 - Pangff's Blog</title>
+	<meta name="author" content="pangff">
+
+	
+	<meta name="description" content="Android打开pdf文件 项目中有个阅读pdf的需求，总结下几种方案 方案一：采用GoogleDocs 优势： 非常简单，而且可以直接通过webview打开线上pdf（不要忘记开启网络权限） 1
+2
+3
+4
+5
+6
+7
+@SuppressLint(&quot; &hellip;">
+	
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="baidu-site-verification" content="4uVEsGeeHG" />
+  <meta name="google-site-verification" content="RF1uUMXanCzUMdaFqAcD1EUdurAKJag8L8CqWylzCb0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="Pangff's Blog" type="application/atom+xml">
+	
+	<link rel="canonical" href="http://www.pffair.com/blog/2016/03/12/android-pdf/">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700' rel='stylesheet' type='text/css'>
+	
+</head>
+
+
+<body>
+	<div class="container">
+		<div class="left-col">
+			<div class="intrude-less">
+			<header id="header" class="inner"><div class="profilepic">	
+	<script src="/javascripts/md5.js"></script>
+	<script type="text/javascript">
+		document.write("<img src='/images/avatar.jpg' alt='Profile Picture' style='width: 160px;' />");
+	</script>
+</div>
+<h1><a href="/">Pangff's Blog</a></h1>
+<p class="subtitle">stay foolish stay hungry.</p>
+<nav id="main-nav">
+<form action="http://www.pffair.com/search" method="get">
+    <input class="search" name="query" type="text" placeholder="Search..."/>
+</form>
+
+<ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+	<li><a href="/about">About</a></li>
+</ul>
+</nav>
+<nav id="sub-nav">
+	<div class="social">
+		
+		
+		
+		
+		
+		<a class="github" href="https://github.com/pangff" title="GitHub">GitHub</a>
+		
+		
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</nav>
+<gcse:search></gcse:search>
+<section>
+  <h1></h1>
+  <ul id="categories">
+    <li class='category'><a href='/blog/categories/3d/'>3d (3)</a></li>
+<li class='category'><a href='/blog/categories/android/'>android (26)</a></li>
+<li class='category'><a href='/blog/categories/docker/'>docker (6)</a></li>
+<li class='category'><a href='/blog/categories/filechooser/'>filechooser (1)</a></li>
+<li class='category'><a href='/blog/categories/js/'>js (1)</a></li>
+<li class='category'><a href='/blog/categories/pathview/'>pathview (1)</a></li>
+<li class='category'><a href='/blog/categories/pdf/'>pdf (1)</a></li>
+<li class='category'><a href='/blog/categories/react/'>react (1)</a></li>
+<li class='category'><a href='/blog/categories/redux/'>redux (1)</a></li>
+<li class='category'><a href='/blog/categories/svg/'>svg (2)</a></li>
+<li class='category'><a href='/blog/categories/tomcat/'>tomcat (1)</a></li>
+<li class='category'><a href='/blog/categories/turn/'>turn (1)</a></li>
+<li class='category'><a href='/blog/categories/vectordrawable/'>vectordrawable (1)</a></li>
+<li class='category'><a href='/blog/categories/webrtc/'>webrtc (1)</a></li>
+<li class='category'><a href='/blog/categories/webview/'>webview (1)</a></li>
+<li class='category'><a href='/blog/categories/bei-wang/'>备忘 (3)</a></li>
+<li class='category'><a href='/blog/categories/xing-neng-you-hua/'>性能优化 (2)</a></li>
+<li class='category'><a href='/blog/categories/fu-wu-duan/'>服务端 (1)</a></li>
+<li class='category'><a href='/blog/categories/shi-liang-tu/'>矢量图 (1)</a></li>
+
+  </ul>
+</section>
+
+
+</header>				
+			</div>
+		</div>	
+		<div class="mid-col">
+			
+				
+			
+			<div class="mid-col-container">
+				<div id="content" class="inner"><article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+	<h1 class="title" itemprop="name">Android打开pdf文件</h1>
+	<div class="entry-content" itemprop="articleBody"><p>项目中有个阅读pdf的需求，总结下几种方案</p>
+
+<!--more-->
+
+
+<h3>方案一：采用GoogleDocs</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>非常简单，而且可以直接通过webview打开线上pdf（不要忘记开启网络权限）</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="nd">@SuppressLint</span><span class="o">(</span><span class="s">&quot;SetJavaScriptEnabled&quot;</span><span class="o">)</span>
+</span><span class='line'><span class="kd">public</span> <span class="kt">void</span> <span class="nf">setDocumentPath</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">path</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">WebView</span> <span class="n">webView</span> <span class="o">=</span> <span class="o">(</span><span class="n">WebView</span><span class="o">)</span> <span class="n">findViewById</span><span class="o">(</span><span class="n">R</span><span class="o">.</span><span class="na">id</span><span class="o">.</span><span class="na">webview</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">webView</span><span class="o">.</span><span class="na">getSettings</span><span class="o">().</span><span class="na">setJavaScriptEnabled</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">webView</span><span class="o">.</span><span class="na">getSettings</span><span class="o">().</span><span class="na">setPluginsEnabled</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">webView</span><span class="o">.</span><span class="na">loadUrl</span><span class="o">(</span><span class="s">&quot;https://docs.google.com/viewer?url=http://www.selab.isti.cnr.it/ws-mate/example.pdf&quot;</span><span class="o">);</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>国内访问google你懂的</li>
+</ul>
+
+
+<p>当然也有解决方案：</p>
+
+<ul>
+<li>可以在自己的服务器做一个代理</li>
+</ul>
+
+
+<h3>方案二：将pdf的Intent抛出</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>也很简单，目前大部分Android设备貌似都有pdf阅读器</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="n">File</span> <span class="n">file</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">File</span><span class="o">(</span><span class="n">Environment</span><span class="o">.</span><span class="na">getExternalStorageDirectory</span><span class="o">().</span><span class="na">getAbsolutePath</span><span class="o">()</span> <span class="o">+</span><span class="s">&quot;/&quot;</span><span class="o">+</span> <span class="n">filename</span><span class="o">);</span>
+</span><span class='line'><span class="n">Intent</span> <span class="n">target</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">Intent</span><span class="o">(</span><span class="n">Intent</span><span class="o">.</span><span class="na">ACTION_VIEW</span><span class="o">);</span>
+</span><span class='line'><span class="n">target</span><span class="o">.</span><span class="na">setDataAndType</span><span class="o">(</span><span class="n">Uri</span><span class="o">.</span><span class="na">fromFile</span><span class="o">(</span><span class="n">file</span><span class="o">),</span><span class="s">&quot;application/pdf&quot;</span><span class="o">);</span>
+</span><span class='line'><span class="n">target</span><span class="o">.</span><span class="na">setFlags</span><span class="o">(</span><span class="n">Intent</span><span class="o">.</span><span class="na">FLAG_ACTIVITY_NO_HISTORY</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">Intent</span> <span class="n">intent</span> <span class="o">=</span> <span class="n">Intent</span><span class="o">.</span><span class="na">createChooser</span><span class="o">(</span><span class="n">target</span><span class="o">,</span> <span class="s">&quot;Open File&quot;</span><span class="o">);</span>
+</span><span class='line'><span class="k">try</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">startActivity</span><span class="o">(</span><span class="n">intent</span><span class="o">);</span>
+</span><span class='line'><span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="n">ActivityNotFoundException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="c1">// Instruct the user to install a PDF reader here, or something</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>不能在应用内打开，如果用户手机没有pdf阅读器就不行了</li>
+</ul>
+
+
+<p>方案三：使用Android PdfRenderer</p>
+
+<p>优势：</p>
+
+<ul>
+<li>应用内集成</li>
+</ul>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>不能滚动，只能单页，操作不方便</li>
+</ul>
+
+
+<h3>方案四：集成三方pdf sdk</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>应用内集成，有现成解决方案</li>
+</ul>
+
+
+<p>推荐三方sdk：</p>
+
+<ul>
+<li><a href="https://www.qoppa.com/android/pdfsdk/">https://www.qoppa.com/android/pdfsdk/</a>  使用了下demo感觉体验不是很好</li>
+<li><a href="https://code.google.com/archive/p/mupdf">https://code.google.com/archive/p/mupdf</a> 貌似需要编译</li>
+<li>当然还有比较不错的需要收费</li>
+</ul>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>应用包会变大，三方出现问题的话，不好调试</li>
+</ul>
+
+</div>
+
+</article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style addthis_16x16_style">
+	
+	
+	
+	
+	
+	<a class="addthis_button_compact"></a>
+	<a class="addthis_counter addthis_bubble_style"></a>
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/300/addthis_widget.js#pubid="></script>
+</div>
+
+
+
+  <section>
+    <h1>评论</h1>
+    <div id="comments" aria-live="polite"><!-- Duoshuo Comment BEGIN -->
+<div class="ds-thread"></div>
+<script type="text/javascript">
+  var duoshuoQuery = {short_name:"pffair"};
+  (function() {
+    var ds = document.createElement('script');
+    ds.type = 'text/javascript';ds.async = true;
+    ds.src = 'http://static.duoshuo.com/embed.js';
+    ds.charset = 'UTF-8';
+    (document.getElementsByTagName('head')[0] 
+    || document.getElementsByTagName('body')[0]).appendChild(ds);
+  })();
+</script>
+<!-- Duoshuo Comment END --></div>
+  </section>
+</div>
+			</div>
+			<footer id="footer" class="inner">Copyright &copy; 2021
+
+    pangff
+
+<a href="https://beian.miit.gov.cn/">京ICP备14050056号-1</a>
+
+Design credit: <a href="http://shashankmehta.in/archive/2012/greyshade.html">Shashank Mehta</a>
+<script type="text/javascript">
+var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_1000501877'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s4.cnzz.com/z_stat.php%3Fid%3D1000501877%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));
+</script></footer>
+			<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-52176210-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+		</div>
+	</div>
+</body>
+</html>

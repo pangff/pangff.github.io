@@ -1,0 +1,518 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: android | Pangff's Blog]]></title>
+  <link href="http://www.pffair.com/blog/categories/android/atom.xml" rel="self"/>
+  <link href="http://www.pffair.com/"/>
+  <updated>2021-04-12T00:18:13+08:00</updated>
+  <id>http://www.pffair.com/</id>
+  <author>
+    <name><![CDATA[pangff]]></name>
+    <email><![CDATA[540688649@qq.com]]></email>
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[WebView图片上传的各种坑]]></title>
+    <link href="http://www.pffair.com/blog/2016/04/01/webview-upload/"/>
+    <updated>2016-04-01T15:56:05+08:00</updated>
+    <id>http://www.pffair.com/blog/2016/04/01/webview-upload</id>
+    <content type="html"><![CDATA[<p>最近项目用到了应用内webview图片上传，虽然最终实现了，但是遇到了各种坑，抽时间总结一下。</p>
+
+<!--more-->
+
+
+<p>我们在应用中用webview加载了一个wap页面，该wap页面需要通过input标签调起本地文件选择。看了前人遗留的webview代码，有重写WebChromeClient的openFileChooser方法，但是经过测试在有些设备上只弹出一次文件选择取消后就再也弹不出来，有些设置上干脆一次都不会弹出来。至此，走向webview文件选择的填坑之路。</p>
+
+<h3>首先解决一次都弹不出的问题。</h3>
+
+<p>经过测试发现这个问题集中在5.0以上的设备，忽然有点儿印象在5.0以上WebChromeClient貌似是做过改动，翻下api发现果然多了一个onShowFileChooser方法。重写WebChromeClient onShowFileChooser 并返回true。这时候在5.0、6.0设备上可以弹出了，但是还是像之前能弹出的设备一样取消后就再也出不来了</p>
+
+<h3>接下来解决某些设备只弹出一次问题</h3>
+
+<p>在stackoverflow搜了半天也没有找到合适答案，于是再看了下onShowFileChooser的api，忽然发现了一句话</p>
+
+<pre><code>To cancel the request, call filePathCallback.onReceiveValue(null) and return true.
+</code></pre>
+
+<p>恍然大悟，原来取消依然是需要回调onReceiveValue。因此在当前页面onResume时候加上如下代码</p>
+
+<pre><code class="java">if(filePathCallback!=null){
+   filePathCallback.onReceiveValue(null);
+}        
+</code></pre>
+
+<p>问题得到解决。需要注意的是在onActivityResult中回调后要将filePathCallback置空，否则当选择一个图片或者拍照返回到页面时onActivityResult 和 onResume都会触发，而且onActivityResult 在 onResume之前。因此不在onActivityResult置空filePathCallback的话会触发两次回调，可能会产生问题（没有验证）.</p>
+
+<p>后面进行正常上传，发现onActivityResult一直不回调。因为webview是在Fragmengt中，因此代码中将Activity的onActivityResult委托给了该Activity下面的WebviewFragment中，如下代码</p>
+
+<pre><code class="java">else if (requestCode == WebViewFragment.FILECHOOSER_RESULTCODE){
+    if(mFragment!=null){
+       mFragment.onActivityResult(requestCode,resultCode,data);
+    }
+}            
+</code></pre>
+
+<p>但是requestCode == WebViewFragment.FILECHOOSER_RESULTCODE的条件判断一直是false，奇怪&hellip;</p>
+
+<h3>Fragment startActivityForResult的坑</h3>
+
+<p>Debug代码进入fragment源码中发现调用顺序是 Fragment［startActivityForResult］->［FragmentActivity］onStartActivityFromFragment -> ［FragmentActivity］ startActivityFromFragment。就在这个方法中,看下源码</p>
+
+<pre><code class="java">/**
+     * Called by Fragment.startActivityForResult() to implement its behavior.
+     */
+    public void startActivityFromFragment(Fragment fragment, Intent intent,
+            int requestCode) {
+        if (requestCode == -1) {
+            super.startActivityForResult(intent, -1);
+            return;
+        }
+        if ((requestCode&amp;0xffff0000) != 0) {
+            throw new IllegalArgumentException("Can only use lower 16 bits for requestCode");
+        }
+        super.startActivityForResult(intent, ((fragment.mIndex+1)&lt;&lt;16) + (requestCode&amp;0xffff));
+    }
+</code></pre>
+
+<p>你会发现super.startActivityForResult的requestCode被改变了,后16位前拼了fragment.mIndex+1。这时候你的Ativity将永远不会返回你之前传的requestCode。解决方法,使用activity去调用就可以了</p>
+
+<pre><code class="java"> getActivity().startActivityForResult(chooserIntent, FILECHOOSER_RESULTCODE);
+</code></pre>
+
+<p>现在结束了吗？debug包没问题一切正常。试试release，忽然发现又打不开了。难道和混淆有关系？查了一下还真是</p>
+
+<h3>解决混淆问题</h3>
+
+<pre><code class="java">-keepclassmembers class * extends android.webkit.WebChromeClient {
+     public void openFileChooser(...);
+     public void onShowFileChooser(...);
+}
+</code></pre>
+
+<p>终于解决了。</p>
+
+<p>之后又看了一些资料，其实openFileChooser一直都没有在Android API中开放，有个<a href="http://stackoverflow.com/questions/30078217/why-openfilechooser-in-webchromeclient-is-hidden-from-the-docs-is-it-safe-to-us">stackoverflow上的说明比较详细</a></p>
+
+<pre><code>Using the old openFileChooser(...) callbacks does not have any security implications. It's just fine. The only downside is that it will not be called on some platform levels and therefore not work.
+
+void openFileChooser(ValueCallback&lt;Uri&gt; uploadMsg) works on Android 2.2 (API level 8) up to Android 2.3 (API level 10)
+
+openFileChooser(ValueCallback&lt;Uri&gt; uploadMsg, String acceptType) works on Android 3.0 (API level 11) up to Android 4.0 (API level 15)
+openFileChooser(ValueCallback&lt;Uri&gt; uploadMsg, String acceptType, String capture) works on Android 4.1 (API level 16) up to Android 4.3 (API level 18)
+
+onShowFileChooser(WebView webView, ValueCallback&lt;Uri[]&gt; filePathCallback, WebChromeClient.FileChooserParams fileChooserParams) works on Android 5.0 (API level 21) and above
+You can use a library that abstracts this away and takes care of all these callbacks on different platform levels so that it just works.
+
+The fact that it's undocumented just means that you can't rely on it. When it was introduced in Android 2.2, nobody could know that it would stop working in Android 4.4, but you had to accept it.
+</code></pre>
+
+<p>之后测试了几个4.4-5.0直间的设备并没有发现问题，可能国内厂商对系统做了处理吧，没有试原生系统在4.4-5.0区间是否真的有问题，感兴趣的可以试试。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[矢量图路径问题的pathview实现方案]]></title>
+    <link href="http://www.pffair.com/blog/2016/03/24/shi-liang-tu-lu-jing-wen-ti-de-pathviewshi-xian-fang-an/"/>
+    <updated>2016-03-24T13:45:54+08:00</updated>
+    <id>http://www.pffair.com/blog/2016/03/24/shi-liang-tu-lu-jing-wen-ti-de-pathviewshi-xian-fang-an</id>
+    <content type="html"><![CDATA[<p>在前面博客<a href="http://www.pffair.com/blog/categories/svg/">关于矢量路线图动态路径在Android实现方案</a>中，根据一些资料简单制定了一些实现方案，该文简单介绍下pathview方案的实现过程</p>
+
+<!--more-->
+
+
+<h4>先上图看下最终的效果</h4>
+
+<p><img src="http://www.pffair.com/images/48.png" alt="初始化" />
+<img src="http://www.pffair.com/images/49.png" alt="点击高亮显示指定路径后" /></p>
+
+<h3>实现思路</h3>
+
+<p>运行了<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a> 了解到该项目实现了在svg图上进行路径绘制的效果，因此根据android-pathview项目的源码能找到实现思路。看过<a href="https://github.com/geftimov/android-pathview">android-pathview</a> 项目源码后，发现要走的路还很长。</p>
+
+<h4>android-pathview项目的实现思路</h4>
+
+<ul>
+<li>基于<a href="https://github.com/BigBadaboom/androidsvg">androidsvg</a> 之上，自定义Pathview模拟加载svg资源到自定义canvas，为什么叫模拟加载，其实Canvas是new出来的并没有真正渲染到视图上</li>
+<li>通过重写Canvas的drawPath方法后可以获取到的svg元素解析后的path路径(androidsvg实现)</li>
+<li>将获取到的path添加到一个list中</li>
+<li>重新绘制Pathview,(onDraw方法中遍历path绘制，之后正常绘制svg)</li>
+<li>当然其中还有一些动画方面的东西，忽略不提。</li>
+</ul>
+
+
+<h4>问题</h4>
+
+<ul>
+<li>我要实现svg图的缩放、移动<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a>不支持怎么破？</li>
+<li>我要实现指定路径绘制，注意是指定，而<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a>是全部path都会获取到并绘制，怎么破？</li>
+<li>我要实现svg图层元素的点击并响应，<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a>不支持，怎么破？</li>
+</ul>
+
+
+<h4>思考</h4>
+
+<ul>
+<li>图形缩放、移动；发现了<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a>的SvgUtils rescaleCanvas方法，改方法是做svg图形的渲染，这部分作者做了canvas的移动和缩放。那么我们可以考虑在该方法加入canvas的移动缩放的外部控制，那么图的缩放移动就实现了。最终实践后确认可以</li>
+<li>绘制指定路径，实现元素点击，他们共同的一个问题就是需要svg元素和解析后的path对应。这样我通过输入svg元素的id就能找到它解析后对应的path做指定路径的绘制，通过点击path我就能知道是哪个对应的svg元素被点击了并作出相应的处理。所以对应必须实现。</li>
+<li>在点击事件中有面临的一个问题是，如何判断点击位置是哪个path呢。这个通过Region不难实现</li>
+</ul>
+
+
+<h4>实现</h4>
+
+<ul>
+<li>关于移动部分的实现和path点击事件处理就不多说了</li>
+<li>重点说下svg元素和path的对应解决方法，为了不再花大量时间去阅读<a href="https://github.com/BigBadaboom/androidsvg">androidsvg</a>的代码看svg到android graphics的渲染，我想到的最快的解决方案（当然不一定是好的）是按顺序去对应。经过测试果然drawPath的绘制和svg元素在文档中出现的顺序是一致的（canvas没有做特殊设置，因为不能确定canvase或对齐方式有变化时会不会有影响），那么我们是不是可以根据顺序就能确定该path对应svg的元素呢，答案是肯定的。</li>
+<li>当然不能忽略的一件事是如何顺序获取到svg的全部元素节点，通过简单浏览<a href="https://github.com/BigBadaboom/androidsvg">androidsvg</a>代码发现了getElementsByTagName这个方法（但是它是protected方法，不得已将androidsvg源码拿了过来放到相同包下），它可以根据svg元素类型去搜索到全部该类型的SvgObject。根据我测试的svg文件，发现节点元素渲染成path的有Ellipse、Circle、Path三种，所以我按顺序对svg文件进行了整理，将相同类型元素放在一起，整体按组Ellipse－Circle－Path放置。那么就可以做到在drawPath方法中取得的svg元素和path一一对应，之后存入一个LinkedHashMap中。</li>
+<li>拿到了svg节点和path的对应，那么绘制和事件对应就没有问题了</li>
+</ul>
+
+
+<h4>代码实现</h4>
+
+<p>(<a href="https://github.com/pangff/pff-lib">https://github.com/pangff/pff-lib</a>) 中的VectorPathView部分。
+个人认为实现方式不是很好，而且要求svg规则有序,有想法的同学欢迎指正</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Android打开pdf文件]]></title>
+    <link href="http://www.pffair.com/blog/2016/03/12/android-pdf/"/>
+    <updated>2016-03-12T17:54:51+08:00</updated>
+    <id>http://www.pffair.com/blog/2016/03/12/android-pdf</id>
+    <content type="html"><![CDATA[<p>项目中有个阅读pdf的需求，总结下几种方案</p>
+
+<!--more-->
+
+
+<h3>方案一：采用GoogleDocs</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>非常简单，而且可以直接通过webview打开线上pdf（不要忘记开启网络权限）</li>
+</ul>
+
+
+<pre><code class="java">
+@SuppressLint("SetJavaScriptEnabled")
+public void setDocumentPath(final String path) {
+    WebView webView = (WebView) findViewById(R.id.webview);
+    webView.getSettings().setJavaScriptEnabled(true);
+    webView.getSettings().setPluginsEnabled(true);
+    webView.loadUrl("https://docs.google.com/viewer?url=http://www.selab.isti.cnr.it/ws-mate/example.pdf");
+}
+</code></pre>
+
+<p>缺点：</p>
+
+<ul>
+<li>国内访问google你懂的</li>
+</ul>
+
+
+<p>当然也有解决方案：</p>
+
+<ul>
+<li>可以在自己的服务器做一个代理</li>
+</ul>
+
+
+<h3>方案二：将pdf的Intent抛出</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>也很简单，目前大部分Android设备貌似都有pdf阅读器</li>
+</ul>
+
+
+<pre><code class="java">
+File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath() +"/"+ filename);
+Intent target = new Intent(Intent.ACTION_VIEW);
+target.setDataAndType(Uri.fromFile(file),"application/pdf");
+target.setFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+
+Intent intent = Intent.createChooser(target, "Open File");
+try {
+    startActivity(intent);
+} catch (ActivityNotFoundException e) {
+    // Instruct the user to install a PDF reader here, or something
+}
+</code></pre>
+
+<p>缺点：</p>
+
+<ul>
+<li>不能在应用内打开，如果用户手机没有pdf阅读器就不行了</li>
+</ul>
+
+
+<p>方案三：使用Android PdfRenderer</p>
+
+<p>优势：</p>
+
+<ul>
+<li>应用内集成</li>
+</ul>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>不能滚动，只能单页，操作不方便</li>
+</ul>
+
+
+<h3>方案四：集成三方pdf sdk</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>应用内集成，有现成解决方案</li>
+</ul>
+
+
+<p>推荐三方sdk：</p>
+
+<ul>
+<li><a href="https://www.qoppa.com/android/pdfsdk/">https://www.qoppa.com/android/pdfsdk/</a>  使用了下demo感觉体验不是很好</li>
+<li><a href="https://code.google.com/archive/p/mupdf">https://code.google.com/archive/p/mupdf</a> 貌似需要编译</li>
+<li>当然还有比较不错的需要收费</li>
+</ul>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>应用包会变大，三方出现问题的话，不好调试</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[关于矢量路线图动态路径在Android实现方案]]></title>
+    <link href="http://www.pffair.com/blog/2016/03/11/svg-android/"/>
+    <updated>2016-03-11T12:00:42+08:00</updated>
+    <id>http://www.pffair.com/blog/2016/03/11/svg-android</id>
+    <content type="html"><![CDATA[<p>最近遇到svg路线图渲染问题，查一些资料总结下解决方案</p>
+
+<!--more-->
+
+
+<h3>方案一：svg＋VectorDrawable</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>Android在5.0以后开始支持VectorDrawable矢量图渲染</li>
+<li>Android Support Library 23.2已经提供向下兼容</li>
+</ul>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>不是全部svg标签都支持，因为svg本身没有完善规范；所以需要修改svg标签到vector支持的标签这个也有三方库去做转化</li>
+<li>不支持动态矢量节点的修改如果要达到路径动态渲染需要内存中修改节点内容，重新渲染到ImageView，速度问题需要验证</li>
+<li>大图加载速度问题需要验证</li>
+<li>内存问题需要验证</li>
+</ul>
+
+
+<h3>方案二：纯三方库</h3>
+
+<p>AndroidSVG：</p>
+
+<ul>
+<li><p>支持svg1.1 － 1.2 大部分标签</p></li>
+<li><p>网址: <a href="https://code.google.com/p/androidsvg/">https://code.google.com/p/androidsvg/</a></p></li>
+<li><p>最新release:  1.2.2-beta-1 (16 June 2014)，还在维护1.3版本有计划提出</p></li>
+<li><p>已知问题：</p>
+
+<ul>
+<li>Stroking of underlined or strike through text is not supported in versions of Android prior to 4.2</li>
+<li>Android 4.3 bug that breaks the <clipPath> feature when using renderToPicture()</li>
+<li>SVGImageView has documented issues in Android Studio</li>
+<li>复杂图形渲染和长度限制</li>
+</ul>
+</li>
+<li>例子项目：
+<a href="https://github.com/bmarrdev/CountryRank">https://github.com/bmarrdev/CountryRank</a></li>
+</ul>
+
+
+<p>svg-android：</p>
+
+<ul>
+<li>svg渲染到canvas上</li>
+<li><p>已经废弃，最后更新2012年</p></li>
+<li><p>网址: <a href="https://github.com/pents90/svg-android/tree/master/svgandroid">https://github.com/pents90/svg-android/tree/master/svgandroid</a></p></li>
+</ul>
+
+
+<p>svg-android-2：</p>
+
+<ul>
+<li><p>修改了svg-android的一些bug</p></li>
+<li><p>svg-android的fork版本最后更新在2014,</p></li>
+<li>网址: <a href="http://code.google.com/p/svg-android-2/">http://code.google.com/p/svg-android-2/</a></li>
+</ul>
+
+
+<p>TPSVG Android SVG Library</p>
+
+<ul>
+<li>速度更快，提供了callback 可以操纵image的节点</li>
+<li>2013年最后更新</li>
+</ul>
+
+
+<p>android-pathview:</p>
+
+<ul>
+<li>基于androidsvg－1.2.1，在它的基础上进行了修改添加了path动画支持，看了源码，其实是在Canvas回调中获取到全部svg path路径做单独渲染，思路可以借鉴</li>
+<li>最后一次更新2016年2月20日 关注961 fork197</li>
+<li>网址：<a href="https://github.com/geftimov/android-pathview/commits/master">https://github.com/geftimov/android-pathview/commits/master</a></li>
+</ul>
+
+
+<h3>方案三：自定义图元＋数据＋原生绘制</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>这种方式是种一定可以实现的方式，也是一种常规解决方法，全部问题都可控</li>
+</ul>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>只针对具体问题，换个项目都要重新编写图元，重用性基本没有</li>
+<li>数据到屏幕的点转化是个问题</li>
+<li>是否要添加手势操作，手势放大缩小后整个图的渲染细节处理</li>
+<li>可能隐含有未知技术问题</li>
+</ul>
+
+
+<h3>总结：</h3>
+
+<ul>
+<li>首先尝试VectorDrawable，并结合pathview思路去解决路径动态控制问题</li>
+<li>其次尝试基于AndroidSVG项目的 pathview思想</li>
+<li>解决问题前两种都失败情况下采用第三种</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[对象池的使用]]></title>
+    <link href="http://www.pffair.com/blog/2015/03/30/dui-xiang-chi-de-shi-yong/"/>
+    <updated>2015-03-30T10:38:04+08:00</updated>
+    <id>http://www.pffair.com/blog/2015/03/30/dui-xiang-chi-de-shi-yong</id>
+    <content type="html"><![CDATA[<p>在android开发中经常会发现当日志中出现大量GC时我们的应用常常出现卡顿。这是因为当虚拟机进行垃圾回收操作时应用所有线程都会暂停，完成后恢复。如果出现大量GC操作时主线程频繁暂停就会影响应用性能了。所以我们在开发中要尽量避免。</p>
+
+<!--more-->
+
+
+<h2>了解Android 垃圾回收</h2>
+
+<p>Android里面是一个三级Generation的内存模型，最近分配的对象会存放在Young Generation区域，当这个对象在这个区域停留的时间达到一定程度，它会被移动到Old Generation，最后到Permanent Generation区域。每一个级别的内存区域都有固定的大小，此后不断有新的对象被分配到此区域，当这些对象总的大小快达到这一级别内存区域的阀值时，会触发GC的操作，以便腾出空间来存放其他新的对象。每次GC发生的时候，所有的线程都是暂停状态的。GC所占用的时间和它是哪一个Generation也有关系，Young Generation的每次GC操作时间是最短的，Old Generation其次，Permanent Generation最长。</p>
+
+<p>导致GC频繁执行有两个原因：</p>
+
+<ul>
+<li>Memory Churn内存抖动，内存抖动是因为大量的对象被创建又在短时间内马上被释放。</li>
+<li>瞬间产生大量的对象会严重占用Young Generation的内存区域，当达到阀值，剩余空间不够的时候，也会触发GC。即使每次分配的对象占用了很少的内存，但是他们叠加在一起会增加Heap的压力，从而触发更多其他类型的GC。这个操作有可能会影响到帧率，并使得用户感知到性能问题。</li>
+</ul>
+
+
+<h2>如何避免</h2>
+
+<p>根据上面GC频繁原因我们可以得出一个简单结论，那就是我们的代码中在卡顿那个操作中进行了大量的对象创建。当然这个还可以通过 Android studio的 Memory Monitor 内存浮动观察到；也可以通过Allocation Tracker来跟踪问题出现的位置。但是我认为直接去看卡顿操作部分对应的代码，应该很容易发现。</p>
+
+<h2>如何解决</h2>
+
+<p>回到主题，如果我们发现了大量对象的创建该如何处理呢？</p>
+
+<ul>
+<li>可以优化就优化，比如在onDraw中初始化了一些对象，我们可以考虑是否可以将这些对象初始化到外部（比如构造方法），而不要在视图绘制需要反复调用的方法中去new</li>
+<li>不能优化的采用对象池解决，如果我们这些对象的初始化不可避免，那么我们要考虑对象的复用，采用对象池来解决</li>
+</ul>
+
+
+<h2>对象池</h2>
+
+<p>我们在Android开发中其实可能已经使用过，只是我们没用关注而已。比如在handler发送消息时，Message的初始化经常会用Message.obtain()来实例化Message对象；在View自定义中用到手势速度控制的VelocityTracker。根据源码虽然两者对实现方式不同（Message使用链表、VelocityTracker使用数组），但是原理是一样的。即：</p>
+
+<pre><code>初始化一个固定大小池子，我们每次创建对象时候先去池子中找有没有，
+如果有直接取出，没有new出来使用后还到池子里。这样便可达到对象
+复用的目的
+</code></pre>
+
+<h2>使用对象池的代价以及注意事项</h2>
+
+<h4>当然使用对象池也是要有一定代价的：</h4>
+
+<ul>
+<li>短时间内生成了大量的对象占满了池子，那么后续的对象是不能复用的</li>
+<li>对象池是静态的，如果池子被占满，当我们离开该页面这些对象可能不再需要，那么池子不释放其中的无用对象还是要占用一定的内存空间</li>
+</ul>
+
+
+<h4>注意事项:</h4>
+
+<ul>
+<li>使用时候申请(obtain)和释放(recycle)成对出现，使用一个对象后一定要释放还给池子</li>
+<li>池子的大小要根据实际情况合理指定。池子太大上面提到的不释放而占用的内存会很大，池子太小对象过多而且因为操作耗而不能立即释放还给池子时候，池子满了，后续对象还是不能复用。所以，根据项目实际场景制定合理的大小是很必要的</li>
+</ul>
+
+
+<h2>对象池的创建方法</h2>
+
+<p>有很多方法都可以实现，比如Message的链表、或者自己实现都可以，但是为了简便这里只说一种最简便方法。采用Android的SynchronizedPool，以一个User的对象池为例</p>
+
+<pre><code class="java">
+public class User {
+
+    public String id;
+    public String name;
+
+    private static final SynchronizedPool&lt;User&gt; sPool = new SynchronizedPool&lt;User&gt;(
+            10);
+
+    public static User obtain() {
+        User instance = sPool.acquire();
+        return (instance != null) ? instance : new User();
+    }
+
+    public void recycle() {
+        sPool.release(this);
+    }
+}
+</code></pre>
+
+<p>我们在申请实例化时调用</p>
+
+<pre><code class="java">//从对象池中获取，第一次对象池没有，会直接new一个,如果有会复用
+User user = User.obtain();
+</code></pre>
+
+<p>对象使用完释放时调用</p>
+
+<pre><code class="java">//使用完毕务必要将对象归还到对象池
+user.recycle();
+</code></pre>
+
+<h2>demo的源代码</h2>
+
+<p><a href="https://github.com/pangff/ObjectPoolDemo">https://github.com/pangff/ObjectPoolDemo</a></p>
+]]></content>
+  </entry>
+  
+</feed>

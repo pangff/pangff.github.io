@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: 3d | Pangff's Blog]]></title>
+  <link href="http://www.pffair.com/blog/categories/3d/atom.xml" rel="self"/>
+  <link href="http://www.pffair.com/"/>
+  <updated>2021-04-12T00:18:13+08:00</updated>
+  <id>http://www.pffair.com/</id>
+  <author>
+    <name><![CDATA[pangff]]></name>
+    <email><![CDATA[540688649@qq.com]]></email>
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[使用Rajawali加载多纹理贴图的复杂模型]]></title>
+    <link href="http://www.pffair.com/blog/2014/06/19/shi-yong-rajawalijia-zai-duo-wen-li-tie-tu-de-fu-za-mo-xing/"/>
+    <updated>2014-06-19T16:13:50+08:00</updated>
+    <id>http://www.pffair.com/blog/2014/06/19/shi-yong-rajawalijia-zai-duo-wen-li-tie-tu-de-fu-za-mo-xing</id>
+    <content type="html"><![CDATA[<p>在上篇笔记中介绍了使用Rajawali加载外部模型的步骤以及注意事项，但是上篇中只加载了一个简单的少纹理贴图的模型，下面通过一个复杂模型的加载来说明多纹理贴图模型加载注意事项。</p>
+
+<!--more-->
+
+
+<p>一、下载模型<a href="http://tf3dm.com/3d-model/beautiful-girl-57398.html">http://tf3dm.com/3d-model/beautiful-girl-57398.html</a></p>
+
+<p>二、根据上篇笔记中的方法修改下载后的.obj .mtl文件（修改名称、obj中mtl的指向、mtl的纹理名称） 以及Texture目录中的dds纹理贴图（dds需要通过XnView导出成psd，用photoshop打开后导出成png图片）</p>
+
+<p>三、新建项目（同上篇笔记）导出后文件放入项目指定目录，如图</p>
+
+<p><img src="http://www.pffair.com/images/25.png" alt="" />
+<img src="http://www.pffair.com/images/27.png" alt="" /></p>
+
+<p>四、 项目中导入模型换为bg_obj模型，此时运行项目会提示 NoSuchElementException的异常，这是因为bg_mtl文件中存在空的token，把该文件中空值的token删除，并把Ks 0.9 0.9 0.9 改为Ks 0 0 0。</p>
+
+<p>五、再运行程序发现程序不出错了，模型显示了，但是没有贴图。打开bg_obj文件，将里面g开头的token 都改成 o。</p>
+
+<p>六、再次运行可以成功贴图，但是女孩的一只手没有贴出来。打开bg_obj文件，仔细观察会发现这个文件是 按顶点坐标、使用纹理排列的。其中有hand01和hand。hand01对应使用的纹理指明了为usemtl Material__30，而hand对应的纹理却没指明，在最后一段# 124 normals 下面加上 # 124 normals。再次运行程序，成功了！</p>
+
+<p>七、项目参考<a href="https://github.com/pangff/myRajawali/tree/beautiful_girl">https://github.com/pangff/myRajawali/tree/beautiful_girl</a></p>
+
+<p>运行结果（注意调整模型方向）</p>
+
+<p><img src="http://www.pffair.com/images/26.png" alt="" /></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[使用Rajawali加载外部模型及其纹理贴图的步骤]]></title>
+    <link href="http://www.pffair.com/blog/2014/06/19/shi-yong-rajawalijia-zai-wai-bu-mo-xing-ji-qi-wen-li-tie-tu-de-bu-zou/"/>
+    <updated>2014-06-19T16:10:14+08:00</updated>
+    <id>http://www.pffair.com/blog/2014/06/19/shi-yong-rajawalijia-zai-wai-bu-mo-xing-ji-qi-wen-li-tie-tu-de-bu-zou</id>
+    <content type="html"><![CDATA[<p>一、下载要加载的模型（我下载的是一个比较简单模型，地址<a href="http://tf3dm.com/3d-model/doomsday-52515.html">http://tf3dm.com/3d-model/doomsday-52515.html</a>）</p>
+
+<!--more-->
+
+
+<p>二、用blender导入模型，然后导出为obj。这里有几个需要注意的地方</p>
+
+<p>具体可以参考</p>
+
+<pre><code>https://github.com/MasDennis/Rajawali/wiki/Tutorial-17-Importing-.Obj-Files
+</code></pre>
+
+<p> 导出时要勾选以下选项：</p>
+
+<ul>
+<li> Apply Modifiers</li>
+<li> Include Normals</li>
+<li> Include UVs</li>
+<li> Write Materials (if applicable)</li>
+<li> Triangulate Faces</li>
+<li> Objects as OBJ Objects</li>
+</ul>
+
+
+<p>  导出后的文件需要重命名：</p>
+
+<ul>
+<li> doomsday villain103.obj > villain_obj</li>
+<li> doomsday villain103.mtl > villain_mtl</li>
+</ul>
+
+
+<p>导出后的图片重命名：</p>
+
+<ul>
+<li> CHRNPCICOVIL103_DIFFUSE.tga > villain_d.png</li>
+<li> CHRNPCICOVIL103_NORMAL.tga > villain_n.png</li>
+</ul>
+
+
+<p> 修改相关路径：</p>
+
+<ul>
+<li> 打开villain_obj修改： mtllib doomsday villain103.mtl >  mtllib villain_mtl</li>
+<li> 打开villain_mtl 修改贴图的路径: CHRNPCICOVIL103_NORMAL.tga > villain_n.png  CHRNPCICOVIL103_DIFFUSE.tga >  villain_d.png</li>
+</ul>
+
+
+<p>三、一切准备就绪，通过android rajawali项目导入模型并显示</p>
+
+<ul>
+<li> 新建项目myRajawali，导入rajawali库（参考之前笔记）</li>
+<li> 将villain_d.png、 villain_n.png放在drawable-nodpi目录下；将villain_obj、villain_mtl放到layout/raw目录下</li>
+<li> 编写代码渲染</li>
+<li> 项目参考：<a href="https://github.com/pangff/myRajawali/tree/simple_ugly">https://github.com/pangff/myRajawali/tree/simple_ugly</a></li>
+</ul>
+
+
+<p>注意：如果贴图失败，需要对图片进行处理：</p>
+
+<ul>
+<li> download XnView</li>
+<li> open the .png file with XnView</li>
+<li> save the files as a .psd file</li>
+<li> open the .psd file in Photoshop</li>
+<li> export the file to .png or .jpg</li>
+</ul>
+
+
+<p>最终效果，如图</p>
+
+<p><img src="http://www.pffair.com/images/24.png" alt="" /></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Rajawali入门]]></title>
+    <link href="http://www.pffair.com/blog/2014/06/19/rajawaliru-men/"/>
+    <updated>2014-06-19T16:05:10+08:00</updated>
+    <id>http://www.pffair.com/blog/2014/06/19/rajawaliru-men</id>
+    <content type="html"><![CDATA[<p>rajawali是Android OpenGL ES 2.0/3.0引擎。<a href="https://github.com/MasDennis/Rajawali">https://github.com/MasDennis/Rajawali</a></p>
+
+<!--more-->
+
+
+<h4>正确的加载rajawali</h4>
+
+<p>首先要导入rajawali库</p>
+
+<p>然后，可以创建自己项目（最简单的helloworld），注意，一定要sdk17，也就是android 4.2，因为rajawali最新版本使用了该版本下的dreamservice（DayDream），当然，你也可以切换到v0.9版本，这样兼容到android 2.3。</p>
+
+<p>修改继承关系，Activity改为RajawaliActivity。这时候就可以测试了，应该没有报错的跑起来，虽然和以前的hello world显示是一样的。</p>
+
+<h4>把Render跑起来，啥也不画</h4>
+
+<p>创建一个Render类，要继承RajawaliRenderer，继承就行了，啥也不用干（得写个构造方法）。</p>
+
+<p>然后，在m0创建的activity中：</p>
+
+<pre><code class="java">
+private MyRenderer myRenderer;
+
+ /**
+  * Called when the activity is first created.
+  */
+ @Override
+ public void onCreate(Bundle savedInstanceState) {
+     super.onCreate(savedInstanceState);
+     myRenderer=new MyRenderer(this);
+     myRenderer.setSurfaceView(mSurfaceView);
+     super.setRenderer(myRenderer);
+ }
+</code></pre>
+
+<p>再次执行，会发现啥也没显示，但是不报错，ok，就是这个效果。</p>
+
+<h4>画个球</h4>
+
+<p>如果参照当前官网turorial01，肯定是不行了，首先是已经没有DiffuseMaterial类了。另外，原文给的代码链接已经失效。必须找到</p>
+
+<pre><code>https://github.com/MasDennis/RajawaliExamples 
+</code></pre>
+
+<p>从这里找到需要的图和代码。</p>
+
+<p>不过当前Examples项目使用的是Fragment，我转到自己简单的代码中，发现光效是无效的。索性在m2中暂时不加入光效。（光效是出不来的了，我测试了Examples项目，问题是一样的）。</p>
+
+<h4>给球加上灯光</h4>
+
+<p>参照最新Examples项目的DirectionalLight示例，给地球加上了灯光。主要是这句话：</p>
+
+<pre><code> material.setDiffuseMethod(new DiffuseMethod.Lambert());
+</code></pre>
+
+<h4>凹凸纹理贴图</h4>
+
+<p>凹凸纹理，需要两张图：</p>
+
+<ul>
+<li> 1张颜色纹理图（就是只有颜色，不包含阴影和凹凸信息），也叫做漫射图（通过漫反射看到的效果）</li>
+<li> 1张凹凸纹理图，一般是法线纹理，特点是1张发蓝色的图（它本身不代表颜色，只是借用RGB表示XYZ法线方向）</li>
+</ul>
+
+
+<p>贴图本身不复杂（其实复杂，复杂的部分引擎代劳了，就是怎么计算像素点最终的颜色值，要综合颜色图以及法线方向等等因素）。</p>
+
+<p>代码上只是增加2个纹理即可：</p>
+
+<pre><code> material.addTexture(new Texture("surfaceTexture",surface));
+ material.addTexture(new NormalMapTexture("normalTexture", normal));
+</code></pre>
+
+<p>源代码在这里：</p>
+
+<pre><code>https://github.com/MarshalW/Planets/tree/m4 
+</code></pre>
+]]></content>
+  </entry>
+  
+</feed>

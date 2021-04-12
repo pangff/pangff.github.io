@@ -1,0 +1,212 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>趟Android L  - Pangff's Blog</title>
+	<meta name="author" content="pangff">
+
+	
+	<meta name="description" content="趟Android L android L 发布一段时间了，抽时间趟了一下，做一下总结。 环境变化，最大变化就是虚拟机从Dalvik变为了ART(在4.3已经引入，但是androidL已经作为默认运行环境)
+ART采用预编译（接收dex文件输入，输出目标机器可执行文件），速度当然要比Dalvik快 &hellip;">
+	
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="baidu-site-verification" content="4uVEsGeeHG" />
+  <meta name="google-site-verification" content="RF1uUMXanCzUMdaFqAcD1EUdurAKJag8L8CqWylzCb0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="Pangff's Blog" type="application/atom+xml">
+	
+	<link rel="canonical" href="http://www.pffair.com/blog/2014/07/24/tang-android-l-preview/">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700' rel='stylesheet' type='text/css'>
+	
+</head>
+
+
+<body>
+	<div class="container">
+		<div class="left-col">
+			<div class="intrude-less">
+			<header id="header" class="inner"><div class="profilepic">	
+	<script src="/javascripts/md5.js"></script>
+	<script type="text/javascript">
+		document.write("<img src='/images/avatar.jpg' alt='Profile Picture' style='width: 160px;' />");
+	</script>
+</div>
+<h1><a href="/">Pangff's Blog</a></h1>
+<p class="subtitle">stay foolish stay hungry.</p>
+<nav id="main-nav">
+<form action="http://www.pffair.com/search" method="get">
+    <input class="search" name="query" type="text" placeholder="Search..."/>
+</form>
+
+<ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+	<li><a href="/about">About</a></li>
+</ul>
+</nav>
+<nav id="sub-nav">
+	<div class="social">
+		
+		
+		
+		
+		
+		<a class="github" href="https://github.com/pangff" title="GitHub">GitHub</a>
+		
+		
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</nav>
+<gcse:search></gcse:search>
+<section>
+  <h1></h1>
+  <ul id="categories">
+    <li class='category'><a href='/blog/categories/3d/'>3d (3)</a></li>
+<li class='category'><a href='/blog/categories/android/'>android (26)</a></li>
+<li class='category'><a href='/blog/categories/docker/'>docker (6)</a></li>
+<li class='category'><a href='/blog/categories/filechooser/'>filechooser (1)</a></li>
+<li class='category'><a href='/blog/categories/js/'>js (1)</a></li>
+<li class='category'><a href='/blog/categories/pathview/'>pathview (1)</a></li>
+<li class='category'><a href='/blog/categories/pdf/'>pdf (1)</a></li>
+<li class='category'><a href='/blog/categories/react/'>react (1)</a></li>
+<li class='category'><a href='/blog/categories/redux/'>redux (1)</a></li>
+<li class='category'><a href='/blog/categories/svg/'>svg (2)</a></li>
+<li class='category'><a href='/blog/categories/tomcat/'>tomcat (1)</a></li>
+<li class='category'><a href='/blog/categories/turn/'>turn (1)</a></li>
+<li class='category'><a href='/blog/categories/vectordrawable/'>vectordrawable (1)</a></li>
+<li class='category'><a href='/blog/categories/webrtc/'>webrtc (1)</a></li>
+<li class='category'><a href='/blog/categories/webview/'>webview (1)</a></li>
+<li class='category'><a href='/blog/categories/bei-wang/'>备忘 (3)</a></li>
+<li class='category'><a href='/blog/categories/xing-neng-you-hua/'>性能优化 (2)</a></li>
+<li class='category'><a href='/blog/categories/fu-wu-duan/'>服务端 (1)</a></li>
+<li class='category'><a href='/blog/categories/shi-liang-tu/'>矢量图 (1)</a></li>
+
+  </ul>
+</section>
+
+
+</header>				
+			</div>
+		</div>	
+		<div class="mid-col">
+			
+				
+			
+			<div class="mid-col-container">
+				<div id="content" class="inner"><article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+	<h1 class="title" itemprop="name">趟Android L</h1>
+	<div class="entry-content" itemprop="articleBody"><p>android L 发布一段时间了，抽时间趟了一下，做一下总结。</p>
+
+<!--more-->
+
+
+<ul>
+<li>环境变化，最大变化就是虚拟机从Dalvik变为了ART(在4.3已经引入，但是androidL已经作为默认运行环境)</li>
+<li>ART采用预编译（接收dex文件输入，输出目标机器可执行文件），速度当然要比Dalvik快，同时在垃圾回收，和调试方面都有提升</li>
+<li>接下来是通知API上的改进
+为了用户隐私去掉了ActivityManager.getRecentTasks()，ActivityManager.getAppTasks()只能得到本应用信息</li>
+<li>界面上的变化,采用了Material design</li>
+<li>添加了锁屏通知Lockscreen notifications</li>
+<li>WebView 升级到 Chromium M36，可以支持（ WebAudio, WebGL, and WebRTC）</li>
+<li>绘图的变化。支持OpenGL ES 3.1</li>
+<li>媒体方面变化。Camera API变化 AudioTrack API变化 MediaController变化</li>
+<li>存储方面的变化</li>
+<li>网络传输变化</li>
+<li>蓝牙广播</li>
+<li>NFC提升</li>
+<li>电池效率</li>
+<li>电池使用测量的开发工具</li>
+</ul>
+
+</div>
+
+</article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style addthis_16x16_style">
+	
+	
+	
+	
+	
+	<a class="addthis_button_compact"></a>
+	<a class="addthis_counter addthis_bubble_style"></a>
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/300/addthis_widget.js#pubid="></script>
+</div>
+
+
+
+  <section>
+    <h1>评论</h1>
+    <div id="comments" aria-live="polite"><!-- Duoshuo Comment BEGIN -->
+<div class="ds-thread"></div>
+<script type="text/javascript">
+  var duoshuoQuery = {short_name:"pffair"};
+  (function() {
+    var ds = document.createElement('script');
+    ds.type = 'text/javascript';ds.async = true;
+    ds.src = 'http://static.duoshuo.com/embed.js';
+    ds.charset = 'UTF-8';
+    (document.getElementsByTagName('head')[0] 
+    || document.getElementsByTagName('body')[0]).appendChild(ds);
+  })();
+</script>
+<!-- Duoshuo Comment END --></div>
+  </section>
+</div>
+			</div>
+			<footer id="footer" class="inner">Copyright &copy; 2021
+
+    pangff
+
+<a href="https://beian.miit.gov.cn/">京ICP备14050056号-1</a>
+
+Design credit: <a href="http://shashankmehta.in/archive/2012/greyshade.html">Shashank Mehta</a>
+<script type="text/javascript">
+var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_1000501877'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s4.cnzz.com/z_stat.php%3Fid%3D1000501877%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));
+</script></footer>
+			<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-52176210-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+		</div>
+	</div>
+</body>
+</html>

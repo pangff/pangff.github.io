@@ -1,0 +1,532 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>logspout-redis-elk - Pangff's Blog</title>
+	<meta name="author" content="pangff">
+
+	
+	<meta name="description" content="Logspout-redis-elk 接上篇logspout-elk.我们在上篇中完成了使用logspout收集docker日志并发送到logstash中。本文在之前的基础上在logspout到logstash之间添加了redis消息队列。 为什么要添加消息队列呢？ &hellip;">
+	
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="baidu-site-verification" content="4uVEsGeeHG" />
+  <meta name="google-site-verification" content="RF1uUMXanCzUMdaFqAcD1EUdurAKJag8L8CqWylzCb0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="Pangff's Blog" type="application/atom+xml">
+	
+	<link rel="canonical" href="http://www.pffair.com/blog/2017/01/20/logspout-redis-elk/">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700' rel='stylesheet' type='text/css'>
+	
+</head>
+
+
+<body>
+	<div class="container">
+		<div class="left-col">
+			<div class="intrude-less">
+			<header id="header" class="inner"><div class="profilepic">	
+	<script src="/javascripts/md5.js"></script>
+	<script type="text/javascript">
+		document.write("<img src='/images/avatar.jpg' alt='Profile Picture' style='width: 160px;' />");
+	</script>
+</div>
+<h1><a href="/">Pangff's Blog</a></h1>
+<p class="subtitle">stay foolish stay hungry.</p>
+<nav id="main-nav">
+<form action="http://www.pffair.com/search" method="get">
+    <input class="search" name="query" type="text" placeholder="Search..."/>
+</form>
+
+<ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+	<li><a href="/about">About</a></li>
+</ul>
+</nav>
+<nav id="sub-nav">
+	<div class="social">
+		
+		
+		
+		
+		
+		<a class="github" href="https://github.com/pangff" title="GitHub">GitHub</a>
+		
+		
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</nav>
+<gcse:search></gcse:search>
+<section>
+  <h1></h1>
+  <ul id="categories">
+    <li class='category'><a href='/blog/categories/3d/'>3d (3)</a></li>
+<li class='category'><a href='/blog/categories/android/'>android (26)</a></li>
+<li class='category'><a href='/blog/categories/docker/'>docker (6)</a></li>
+<li class='category'><a href='/blog/categories/filechooser/'>filechooser (1)</a></li>
+<li class='category'><a href='/blog/categories/js/'>js (1)</a></li>
+<li class='category'><a href='/blog/categories/pathview/'>pathview (1)</a></li>
+<li class='category'><a href='/blog/categories/pdf/'>pdf (1)</a></li>
+<li class='category'><a href='/blog/categories/react/'>react (1)</a></li>
+<li class='category'><a href='/blog/categories/redux/'>redux (1)</a></li>
+<li class='category'><a href='/blog/categories/svg/'>svg (2)</a></li>
+<li class='category'><a href='/blog/categories/tomcat/'>tomcat (1)</a></li>
+<li class='category'><a href='/blog/categories/turn/'>turn (1)</a></li>
+<li class='category'><a href='/blog/categories/vectordrawable/'>vectordrawable (1)</a></li>
+<li class='category'><a href='/blog/categories/webrtc/'>webrtc (1)</a></li>
+<li class='category'><a href='/blog/categories/webview/'>webview (1)</a></li>
+<li class='category'><a href='/blog/categories/bei-wang/'>备忘 (3)</a></li>
+<li class='category'><a href='/blog/categories/xing-neng-you-hua/'>性能优化 (2)</a></li>
+<li class='category'><a href='/blog/categories/fu-wu-duan/'>服务端 (1)</a></li>
+<li class='category'><a href='/blog/categories/shi-liang-tu/'>矢量图 (1)</a></li>
+
+  </ul>
+</section>
+
+
+</header>				
+			</div>
+		</div>	
+		<div class="mid-col">
+			
+				
+			
+			<div class="mid-col-container">
+				<div id="content" class="inner"><article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+	<h1 class="title" itemprop="name">Logspout-redis-elk</h1>
+	<div class="entry-content" itemprop="articleBody"><p>接上篇<a href="http://www.pffair.com/blog/2017/01/15/logspout-elk/">logspout-elk</a>.我们在上篇中完成了使用logspout收集docker日志并发送到logstash中。本文在之前的基础上在logspout到logstash之间添加了redis消息队列。</p>
+
+<!--more-->
+
+
+<h3>为什么要添加消息队列呢？</h3>
+
+<p>参考ELK官方的文档<a href="https://www.elastic.co/guide/en/logstash/current/deploying-and-scaling.html#deploying-message-queueing">Managing Throughput Spikes with Message Queueing</a>。当logstash索引消费速率低于传入速率时Logstash将会对传入事件进行限制，这样会使传入事件在数据源头堆积。添加消息队列不仅可以起到防止back pressure作用同时还可以放置数据丢失。当从消息队列消费数据失败我们还可以重新获取。在我们之前的架构中如果事件消费出现异常(比如我们的Elasticsearch出现问题)不能及时消费logstash获取到的日志时那么logstash做限入控制，数据将会在我们的container堆积，而此时如果我们container出现问题而被remove并且恰恰没有mount宿主机磁盘进行log存储的话那么我们之前的日志将会全部丢失，由此可见添加消息队列的重要性。至于为什么选用redis，只是简单了解到它的速度、易用性、和低资源需求比较好，最主要的原因还是相对 Kafka、RabbitMQ对它更熟悉。如果感兴趣可以对（redis、kafka、RabbitMQ）做一个简单对比和测试</p>
+
+<h3>添加redis message broker</h3>
+
+<p>由于采用redis message broker我们需要修改logstash的配置文件，所以整体的service创建我们重新走一遍，也算对之前内容的巩固</p>
+
+<p>开始之前将全部的service、network删除</p>
+
+<p><strong>删除service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service rm logstash \
+</span><span class='line'>elasticsearch proxy \
+</span><span class='line'>swarm-listener kibana
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>删除network</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker network rm elk proxy
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建elk overlay network</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker network create --driver overlay elk
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建elasticsearch service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name elasticsearch \
+</span><span class='line'>    --mode global \
+</span><span class='line'>    --network elk \
+</span><span class='line'>    -p 9200:9200 \
+</span><span class='line'>    -e ES_JAVA_OPTS="-Dmapper.allow_dots_in_name=true" \
+</span><span class='line'>    --constraint "node.labels.elk == yes" \
+</span><span class='line'>    --reserve-memory 500m \
+</span><span class='line'>    elasticsearch:2.4
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>需要注意的是</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>-e ES_JAVA_OPTS="-Dmapper.allow_dots_in_name=true"</span></code></pre></td></tr></table></div></figure>
+
+
+<p>这个环境变量，使用它的目的是为了让Elasticsearch允许日志属性名称中有".&ldquo;，比如类似com.docker.node.id这样的属性名字，在Elasticsearch 2.X版本中是不允许的收集的日志中如果存在的话Elasticsearch会抛异常</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>MapperParsingException[Field name [com.docker.node.id] cannot contain '.'] </span></code></pre></td></tr></table></div></figure>
+
+
+<p><em>加个小备注：Elasticsearch的日志可以通过。</em> <strong>docker ps -a</strong>
+<em>找到Elasticsearch的container id然后</em>
+<strong>docker logs containerid</strong> <em>查看</em></p>
+
+<p>具体关于点的问题可以参考<a href="https://www.elastic.co/guide/en/elasticsearch/reference/2.4/dots-in-names.html">dots-in-names</a>
+当然也可以直接安装5.X的<a href="https://hub.docker.com/_/elasticsearch/">Elasticsearch</a>，5.0默认是支持的。我开始尝试安装5.0版本但是create service 会提示netwrok not found，不能创建成功，之后没有再尝试解决，感兴趣的话可以试试并且将elasticsearch 2.X版本和5.X做一个比较，5.x相对2.x的变化</p>
+
+<p><strong>创建redis service,加入到elk network</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name redis \
+</span><span class='line'>--network elk \
+</span><span class='line'>-p 6379:6379  redis redis-server --requirepass redis
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>通过redis-server &ndash;requirepass 设置密码为redis。建议这里要设置密码，再实际操作时发现外部全局扫描redis时候并且可能运行CONFIG SET REQUIREPASS，会锁定redis运行实例，出现授权提示<a href="http://stackoverflow.com/questions/34115213/redis-raise-error-noauth-authentication-required-but-there-is-no-password-setti">参考</a></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>redis (error) NOAUTH Authentication required.</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>修改logstash配置文件</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>input {
+</span><span class='line'>  redis {
+</span><span class='line'>    host =&gt; "redis"
+</span><span class='line'>    data_type =&gt; "list"
+</span><span class='line'>    key =&gt; "logspout"
+</span><span class='line'>    codec =&gt; "json"
+</span><span class='line'>    password =&gt; "redis"
+</span><span class='line'>  }
+</span><span class='line'>}
+</span><span class='line'>filter {
+</span><span class='line'>
+</span><span class='line'>}
+</span><span class='line'>output {
+</span><span class='line'>  elasticsearch {
+</span><span class='line'>    hosts =&gt; ["elasticsearch:9200"]
+</span><span class='line'>  }
+</span><span class='line'>}
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>这里需要注意的是key，它对应的是我们日志收集后存储到redis中的key，关于key的指定方式会在后面描述。filter部分我没有添加信息，真实环境根据需要在这里添加一些日志过滤处理，比如格式化、删除无用日志等等，感兴趣可以去看下。password为redis密码</p>
+
+<p><strong>上传配置文件到节点主机</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>mkdir -p docker/logstash
+</span><span class='line'>cp conf/logstash.conf docker/logstash/logstash.conf
+</span><span class='line'>scp -r docker root@xxx.xxx.xxx.xxx:/
+</span><span class='line'>scp -r docker root@xxx.xxx.xxx.xxx:/
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建logstash service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name logstash \
+</span><span class='line'>    --mount "type=bind,source=/docker/logstash,target=/conf" \
+</span><span class='line'>    --mode global \
+</span><span class='line'>    --network elk \
+</span><span class='line'>    --constraint "node.labels.elk == yes" \
+</span><span class='line'>    -e LOGSPOUT=ignore \
+</span><span class='line'>    --reserve-memory 100m \
+</span><span class='line'>    mywebgrocer/logstash logstash -f /conf/logstash.conf
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建proxy overlay network</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker network create --driver overlay proxy
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建swarm-listener service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name swarm-listener \
+</span><span class='line'>    --network proxy \
+</span><span class='line'>    --mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock" \
+</span><span class='line'>    -e DF_NOTIF_CREATE_SERVICE_URL=http://proxy:8080/v1/docker-flow-proxy/reconfigure \
+</span><span class='line'>    -e DF_NOTIF_REMOVE_SERVICE_URL=http://proxy:8080/v1/docker-flow-proxy/remove \
+</span><span class='line'>    --constraint 'node.role==manager' \
+</span><span class='line'>    vfarcic/docker-flow-swarm-listener
+</span><span class='line'>    </span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建proxy service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name proxy \
+</span><span class='line'>    -p 80:80 \
+</span><span class='line'>    -p 443:443 \
+</span><span class='line'>    --network proxy \
+</span><span class='line'>    -e MODE=swarm \
+</span><span class='line'>    -e LISTENER_ADDRESS=swarm-listener \
+</span><span class='line'>    vfarcic/docker-flow-proxy
+</span><span class='line'>    </span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建kibana service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name kibana \
+</span><span class='line'>    --network elk \
+</span><span class='line'>    --network proxy \
+</span><span class='line'>    -e ELASTICSEARCH_URL=http://elasticsearch:9200 \
+</span><span class='line'>    --reserve-memory 50m \
+</span><span class='line'>    --label com.df.notify=true \
+</span><span class='line'>    --label com.df.distribute=true \
+</span><span class='line'>    --label com.df.servicePath=/app/kibana,/bundles,/elasticsearch \
+</span><span class='line'>    --label com.df.port=5601 \
+</span><span class='line'>    kibana:4.6</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>比较重要的一步创建<a href="https://github.com/rtoma/logspout-redis-logstash">logspout-redis-logstash service</a></strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name logspout \
+</span><span class='line'>    --network elk \
+</span><span class='line'>    --mode global \
+</span><span class='line'>    --mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock" \
+</span><span class='line'>    rtoma/logspout-redis-logstash redis://redis?password=redis
+</span><span class='line'>    </span></code></pre></td></tr></table></div></figure>
+
+
+<p>其实logspout-redis-logstash是可以指定redis的key的如redis://redis?key=&ldquo;logspout"。因为不指定默认是logspout，我没有写默认就是logspout。所以这部分对应的就是前面logstash配置文件redis中的key值。password为redis密码</p>
+
+<p><strong>我们自己的测试service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create -p 3000:3000 --name hello-service pangff/hello-service:latest
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>访问测试服务</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>open http://$(docker-machine ip es-swarm-1):3000/hello/123
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>访问Kibana</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>open http://$(docker-machine ip es-swarm-1)/app/kibana
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>配置index，然后Discover，搜索hello结果如图（访问一次再看，会发现结果变多一条）</p>
+
+<p><img src="http://www.pffair.com/images/65.png" alt="" /></p>
+
+<p><em>如果访问Kibana后在创建logstash-**默认索引时候下面是灰色没有mapper时，说明elasticsearch没有收到日志。如果在创建logstash-默认索引时候可以创建但是Time-field name没有内容时候，说明日志格式问题或者Elasticsearch出现异常</em></p>
+
+<h3>备注</h3>
+
+<p><strong>查看redis container中logspout内容</strong></p>
+
+<p>查看redis在哪个节点</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service ps redis
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>进入redis对应主机</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker-machine ssh es-swarm-1
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>查看redis container id</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker ps -a
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>找到redis容器id进入容器（2361aa523cd1是redis容器id）</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker exec -it 2361aa523cd1 /bin/bash
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>访问redis</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>redis-cli</span></code></pre></td></tr></table></div></figure>
+
+
+<p>查看key为logsput类型为list的数据前10条</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>LRANGE logspout 0 10
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>后续需要处理</h3>
+
+<ul>
+<li>是否有循环日志采集问题，比如统计到elasticsearch日志后，日志进入elasticsearch本身也会出现日志，这样造成循环</li>
+<li>在正式环境下该日志处理架构的节点编排、network处理</li>
+<li>elasticsearch的数据备份，磁盘扩容</li>
+<li>该日志处理架构下，个个节点性能指标</li>
+<li>该日志能否按需求收集相关日志,需要后续根据业务测试</li>
+<li><a href="https://www.elastic.co/blog/kibana-4-video-tutorials-part-1">kibana</a>的深入学习</li>
+</ul>
+
+</div>
+
+</article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style addthis_16x16_style">
+	
+	
+	
+	
+	
+	<a class="addthis_button_compact"></a>
+	<a class="addthis_counter addthis_bubble_style"></a>
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/300/addthis_widget.js#pubid="></script>
+</div>
+
+
+
+  <section>
+    <h1>评论</h1>
+    <div id="comments" aria-live="polite"><!-- Duoshuo Comment BEGIN -->
+<div class="ds-thread"></div>
+<script type="text/javascript">
+  var duoshuoQuery = {short_name:"pffair"};
+  (function() {
+    var ds = document.createElement('script');
+    ds.type = 'text/javascript';ds.async = true;
+    ds.src = 'http://static.duoshuo.com/embed.js';
+    ds.charset = 'UTF-8';
+    (document.getElementsByTagName('head')[0] 
+    || document.getElementsByTagName('body')[0]).appendChild(ds);
+  })();
+</script>
+<!-- Duoshuo Comment END --></div>
+  </section>
+</div>
+			</div>
+			<footer id="footer" class="inner">Copyright &copy; 2021
+
+    pangff
+
+<a href="https://beian.miit.gov.cn/">京ICP备14050056号-1</a>
+
+Design credit: <a href="http://shashankmehta.in/archive/2012/greyshade.html">Shashank Mehta</a>
+<script type="text/javascript">
+var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_1000501877'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s4.cnzz.com/z_stat.php%3Fid%3D1000501877%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));
+</script></footer>
+			<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-52176210-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+		</div>
+	</div>
+</body>
+</html>

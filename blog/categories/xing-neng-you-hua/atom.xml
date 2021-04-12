@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: 性能优化 | Pangff's Blog]]></title>
+  <link href="http://www.pffair.com/blog/categories/xing-neng-you-hua/atom.xml" rel="self"/>
+  <link href="http://www.pffair.com/"/>
+  <updated>2021-04-12T00:18:13+08:00</updated>
+  <id>http://www.pffair.com/</id>
+  <author>
+    <name><![CDATA[pangff]]></name>
+    <email><![CDATA[540688649@qq.com]]></email>
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[对象池的使用]]></title>
+    <link href="http://www.pffair.com/blog/2015/03/30/dui-xiang-chi-de-shi-yong/"/>
+    <updated>2015-03-30T10:38:04+08:00</updated>
+    <id>http://www.pffair.com/blog/2015/03/30/dui-xiang-chi-de-shi-yong</id>
+    <content type="html"><![CDATA[<p>在android开发中经常会发现当日志中出现大量GC时我们的应用常常出现卡顿。这是因为当虚拟机进行垃圾回收操作时应用所有线程都会暂停，完成后恢复。如果出现大量GC操作时主线程频繁暂停就会影响应用性能了。所以我们在开发中要尽量避免。</p>
+
+<!--more-->
+
+
+<h2>了解Android 垃圾回收</h2>
+
+<p>Android里面是一个三级Generation的内存模型，最近分配的对象会存放在Young Generation区域，当这个对象在这个区域停留的时间达到一定程度，它会被移动到Old Generation，最后到Permanent Generation区域。每一个级别的内存区域都有固定的大小，此后不断有新的对象被分配到此区域，当这些对象总的大小快达到这一级别内存区域的阀值时，会触发GC的操作，以便腾出空间来存放其他新的对象。每次GC发生的时候，所有的线程都是暂停状态的。GC所占用的时间和它是哪一个Generation也有关系，Young Generation的每次GC操作时间是最短的，Old Generation其次，Permanent Generation最长。</p>
+
+<p>导致GC频繁执行有两个原因：</p>
+
+<ul>
+<li>Memory Churn内存抖动，内存抖动是因为大量的对象被创建又在短时间内马上被释放。</li>
+<li>瞬间产生大量的对象会严重占用Young Generation的内存区域，当达到阀值，剩余空间不够的时候，也会触发GC。即使每次分配的对象占用了很少的内存，但是他们叠加在一起会增加Heap的压力，从而触发更多其他类型的GC。这个操作有可能会影响到帧率，并使得用户感知到性能问题。</li>
+</ul>
+
+
+<h2>如何避免</h2>
+
+<p>根据上面GC频繁原因我们可以得出一个简单结论，那就是我们的代码中在卡顿那个操作中进行了大量的对象创建。当然这个还可以通过 Android studio的 Memory Monitor 内存浮动观察到；也可以通过Allocation Tracker来跟踪问题出现的位置。但是我认为直接去看卡顿操作部分对应的代码，应该很容易发现。</p>
+
+<h2>如何解决</h2>
+
+<p>回到主题，如果我们发现了大量对象的创建该如何处理呢？</p>
+
+<ul>
+<li>可以优化就优化，比如在onDraw中初始化了一些对象，我们可以考虑是否可以将这些对象初始化到外部（比如构造方法），而不要在视图绘制需要反复调用的方法中去new</li>
+<li>不能优化的采用对象池解决，如果我们这些对象的初始化不可避免，那么我们要考虑对象的复用，采用对象池来解决</li>
+</ul>
+
+
+<h2>对象池</h2>
+
+<p>我们在Android开发中其实可能已经使用过，只是我们没用关注而已。比如在handler发送消息时，Message的初始化经常会用Message.obtain()来实例化Message对象；在View自定义中用到手势速度控制的VelocityTracker。根据源码虽然两者对实现方式不同（Message使用链表、VelocityTracker使用数组），但是原理是一样的。即：</p>
+
+<pre><code>初始化一个固定大小池子，我们每次创建对象时候先去池子中找有没有，
+如果有直接取出，没有new出来使用后还到池子里。这样便可达到对象
+复用的目的
+</code></pre>
+
+<h2>使用对象池的代价以及注意事项</h2>
+
+<h4>当然使用对象池也是要有一定代价的：</h4>
+
+<ul>
+<li>短时间内生成了大量的对象占满了池子，那么后续的对象是不能复用的</li>
+<li>对象池是静态的，如果池子被占满，当我们离开该页面这些对象可能不再需要，那么池子不释放其中的无用对象还是要占用一定的内存空间</li>
+</ul>
+
+
+<h4>注意事项:</h4>
+
+<ul>
+<li>使用时候申请(obtain)和释放(recycle)成对出现，使用一个对象后一定要释放还给池子</li>
+<li>池子的大小要根据实际情况合理指定。池子太大上面提到的不释放而占用的内存会很大，池子太小对象过多而且因为操作耗而不能立即释放还给池子时候，池子满了，后续对象还是不能复用。所以，根据项目实际场景制定合理的大小是很必要的</li>
+</ul>
+
+
+<h2>对象池的创建方法</h2>
+
+<p>有很多方法都可以实现，比如Message的链表、或者自己实现都可以，但是为了简便这里只说一种最简便方法。采用Android的SynchronizedPool，以一个User的对象池为例</p>
+
+<pre><code class="java">
+public class User {
+
+    public String id;
+    public String name;
+
+    private static final SynchronizedPool&lt;User&gt; sPool = new SynchronizedPool&lt;User&gt;(
+            10);
+
+    public static User obtain() {
+        User instance = sPool.acquire();
+        return (instance != null) ? instance : new User();
+    }
+
+    public void recycle() {
+        sPool.release(this);
+    }
+}
+</code></pre>
+
+<p>我们在申请实例化时调用</p>
+
+<pre><code class="java">//从对象池中获取，第一次对象池没有，会直接new一个,如果有会复用
+User user = User.obtain();
+</code></pre>
+
+<p>对象使用完释放时调用</p>
+
+<pre><code class="java">//使用完毕务必要将对象归还到对象池
+user.recycle();
+</code></pre>
+
+<h2>demo的源代码</h2>
+
+<p><a href="https://github.com/pangff/ObjectPoolDemo">https://github.com/pangff/ObjectPoolDemo</a></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[内存泄漏的监测与修复]]></title>
+    <link href="http://www.pffair.com/blog/2015/03/17/nei-cun-xie-lou-de-jian-ce-yu-xiu-fu/"/>
+    <updated>2015-03-17T15:52:06+08:00</updated>
+    <id>http://www.pffair.com/blog/2015/03/17/nei-cun-xie-lou-de-jian-ce-yu-xiu-fu</id>
+    <content type="html"><![CDATA[<p>在android开发中，我们经常会遇到OutOfMemory的问题。有的由于listview中没有通过ViewHolder复用item，有的由于图片过大没有压缩，当然最多的还是由于我们在开发中不小心造成的内存泄漏。结合本人的开发经验，下面我们来重点看下如何监测我们的内存泄漏问题以及如何定位解决它。</p>
+
+<!--more-->
+
+
+<h4>如何监测</h4>
+
+<p>在我们的开发阶段当出现OutOfMemory的时候，我们往往不能直接根据日志来定位它到底是由于什么造成的。为了解决这个问题，在我们的项目中采用了“面包屑”的原理（就是跟踪纪录每一个Activity的生成和释放）。</p>
+
+<ul>
+<li>我们在BaseApplication（它继承Application，在AndroidManifest.xml的application标签配置android:name）中初始化两个存放Activity的list，分别叫listCurrent、listLeak（采用弱引用WeakReference<Activity>，否则listLeak持有的activity都不能释放）。</li>
+<li>在Activity的onCreate中listCurrent添加该Activity，同时遍历listLeak进行已释放activity的remove(弱引用为空或者get()为空时说明该弱引用的Activity已经释放)</li>
+<li>然后在Activity的onDestory方法中listCurrent进行该activity的remove操作。</li>
+<li>这样当我们捕获全局异常时候，就可以打印出listCurrent、和listLeak，listCurrent就是我们操作过的全部Activity栈，而listLeak就是当前尚未释放的Activity，结合当前应用开启的Activity就可以判断是不是已经关闭的Activity仍然没有释放而存在在listLeak中。</li>
+</ul>
+
+
+<p>如果出现了OutOfMemory，那么我们优先要检查的就是listLeak中并且不在listCurrent中的Activity了。</p>
+
+<h4>如何定位</h4>
+
+<p>找到了这些存在内存泄漏问题的Activity后我们该如何准确定位到，它泄漏的原因呢？那就要用到内存泄漏检测定位的神器DDMS的"DUMP HPROF File"功能结合 MAT(Memory Analyzer，有eclipse插件(<a href="https://eclipse.org/mat/">https://eclipse.org/mat/</a>)，安装后可以直接通过DUMP HPROF File 后自动打开hprof文件)了。</p>
+
+<h4>举个例子</h4>
+
+<p>创建Android项目memoryleakanalyzer</p>
+
+<p>定义BaseApplication</p>
+
+<pre><code class="java">
+public class BaseApplication extends Application {
+
+    public ArrayList&lt;Activity&gt; listCurrent;//当前activity列表
+    public ArrayList&lt;WeakReference&lt;Activity&gt;&gt; listLeak;//泄漏列表
+
+    public static BaseApplication instance;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        instance = this;
+        listCurrent = new ArrayList&lt;Activity&gt;();
+        listLeak = new ArrayList&lt;WeakReference&lt;Activity&gt;&gt;();
+    }
+
+    /**
+     * 添加activity，在activity的onCreate中
+     * @param activity
+     */
+    public void addActivity(final BaseActivity activity) {
+        listCurrent.add(activity);
+        synchronized (listLeak) {
+            for (int j = listLeak.size() - 1; j &gt;= 0; j--) {
+                WeakReference&lt;Activity&gt; wr = listLeak.get(j);
+                if (wr == null || wr.get() == null) {
+                    listLeak.remove(j);
+                }
+            }
+            listLeak.add(new WeakReference&lt;Activity&gt;(activity));
+        }
+    }
+
+    /**
+     * activity的destory中删除
+     * @param activity
+     */
+    public void removeActivity(final BaseActivity activity) {
+        listCurrent.remove(activity);
+    }
+}
+</code></pre>
+
+<p>全局异常处理打印activity信息</p>
+
+<pre><code class="java">
+@Override
+    public void uncaughtException(final Thread thread, final Throwable ex) {
+        if (ex == null) {
+            return;
+        }
+
+        if (lastThrowable == ex || ex.getCause() != null
+                &amp;&amp; lastThrowable == ex.getCause()) {
+            android.os.Process.killProcess(android.os.Process.myPid());
+            System.exit(1);
+            return;
+        }
+
+        StringBuilder sbActivities = new StringBuilder();
+        sbActivities.append("activities: ");
+        StringBuilder sbLeakActivities = new StringBuilder();
+        sbLeakActivities.append("leak activities: ");
+        ArrayList&lt;WeakReference&lt;Activity&gt;&gt; list = BaseApplication.instance.listLeak;
+        for (WeakReference&lt;Activity&gt; wr : list) {
+            if (wr == null) {
+                continue;
+            }
+            Activity activity = wr.get();
+            if (activity == null) {
+                continue;
+            }
+            sbActivities.append(activity.getClass().getSimpleName()).append(", ");
+            if (!BaseApplication.instance.listCurrent.contains(activity)) {
+                sbLeakActivities.append(activity.getClass().getSimpleName()).append(", ");
+            }
+        }
+        sbActivities.append("\n").append(sbLeakActivities);
+
+        Throwable myThrowable = ex;
+
+        if (ex instanceof Exception) {
+            myThrowable = new Exception(sbActivities.toString(), ex);
+        } else if (ex instanceof Error) {
+            myThrowable = new Error(sbActivities.toString(), ex);
+        }
+
+        lastThrowable = myThrowable;
+
+        //交还给系统处理，我们只是在wrapperThrowable附加信息
+        mSystemDefaultHandler.uncaughtException(thread, myThrowable);
+        return;
+
+    }
+</code></pre>
+
+<p>定义BaseActivity</p>
+
+<pre><code class="java">
+public class BaseActivity extends Activity{
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        BaseApplication.instance.addActivity(this);
+        MyCrashHandler.getInstance().setDefaultUncaughtExceptionHandler();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        BaseApplication.instance.removeActivity(this);
+    }
+}
+</code></pre>
+
+<p>MainActivity中跳转到LeakAtivity</p>
+
+<pre><code class="java">
+public class MainActivity extends BaseActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+    }
+
+    public void gotoLeakActivity(View view){
+        Intent intent = new Intent();
+        intent.setClass(this, LeakActivity.class);
+        startActivity(intent);
+    }
+}
+</code></pre>
+
+<p>LeakActivity模拟内存泄漏</p>
+
+<pre><code class="java">
+public class LeakActivity extends BaseActivity{
+
+    public static  int MSG = 0;
+    private Handler handler = new MyHandler();
+    ArrayList&lt;String&gt; list = new ArrayList&lt;String&gt;();
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_leak);
+
+        handler.sendEmptyMessage(MSG);
+    }
+
+    /**
+     * 模拟内存泄漏
+     * @author pangff
+     */
+    private class MyHandler extends Handler {
+        @Override
+        public void handleMessage(final Message msg) {
+          super.handleMessage(msg);
+          if(msg.what == MSG){
+                    for(int i=0;i&lt;10000;i++){
+                        list.add(String.valueOf(i));//为了尽快的造成OutOfMemory
+                    }
+                handler.sendEmptyMessageDelayed(MSG, 1000);//循环发送消息
+          }
+        }
+      }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        //handler.removeMessages(MSG);
+    }
+}
+</code></pre>
+
+<p>我们运行程序从MainActivity点击leak activity到leak activity然后后退退出leak activity再进入，多次重复几次后会出现如图异常</p>
+
+<p><img src="http://www.pffair.com/images/38.png" alt="" /></p>
+
+<p>根据日志我们可以看到我们点击了5次leak acitivity进入LeakActivity并且都退出了。日志中leak activitys：应该是没有的然而日志中确出现了5次，很显然我们的LeakActivity存在内存泄漏。</p>
+
+<p>下面我们来找到LeakActivity中泄漏问题根源</p>
+
+<p>进入eclipse的ddms模式，如图</p>
+
+<p><img src="http://www.pffair.com/images/39.png" alt="" /></p>
+
+<p>选中我们的项目进程点击DUMP HPROF file按钮，如图</p>
+
+<p><img src="http://www.pffair.com/images/40.png" alt="" /></p>
+
+<p>等待生成hprof文件并用mat打开，打开后选择leak report，如图</p>
+
+<p><img src="http://www.pffair.com/images/41.png" alt="" /></p>
+
+<p>然后进入leak report，如图</p>
+
+<p><img src="http://www.pffair.com/images/42.png" alt="" /></p>
+
+<p>我们不看这个报告，因为我们已经知道了具体位置，打开Dominaor视图，如图</p>
+
+<p><img src="http://www.pffair.com/images/43.png" alt="" /></p>
+
+<p>然后输入我们要找的LeakActivity进行过滤，发现果然有好几个LeakActivity实例（按正常来说我们退出了应该都销毁不存在才对，存在说明内存泄漏了）如图</p>
+
+<p><img src="http://www.pffair.com/images/44.png" alt="" /></p>
+
+<p>然后我们选中一个，到incoming refrence这样清晰看到LeakActivity持有的内容，如图</p>
+
+<p><img src="http://www.pffair.com/images/45.png" alt="" /></p>
+
+<p>然后我们再选择Path TO GC Roots（如果存在GC Roots说明没有释放）来找到它未被回收的原因，如图</p>
+
+<p><img src="http://www.pffair.com/images/46.png" alt="" /></p>
+
+<p>结果，如图</p>
+
+<p><img src="http://www.pffair.com/images/47.png" alt="" /></p>
+
+<p>根据上面的图可以看到原因出在我们的内部类MyHandler上，循环发送了消息到主线程的消息队列。handler一直未被释放而它的外部类LeakActivity也不能被释放(默认的内部类会持有外部类的引用)。这下我们就知道该怎么改了吧.最简单方法，在LeakActivity中的onDestory中在消息队列中删除这个MSG消息，如下代码</p>
+
+<pre><code class="java">
+@Override
+    protected void onDestroy() {
+        super.onDestroy();
+        handler.removeMessages(MSG);
+    }
+</code></pre>
+
+<p>我们再次测试会发现不会出现OutOfMemory了。然后使用MAT重复检测步骤LeakActivity的实例一个也不见了，内存问题解决。</p>
+
+<p>测试代码地址</p>
+
+<pre><code>https://github.com/pangff/MemoryLeakAnalyzer
+</code></pre>
+]]></content>
+  </entry>
+  
+</feed>

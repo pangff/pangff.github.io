@@ -1,0 +1,522 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Pangff's Blog</title>
+	<meta name="author" content="pangff">
+
+	
+	<meta name="description" content="android, pathview, svg, 矢量图 矢量图路径问题的pathview实现方案 在前面博客关于矢量路线图动态路径在Android实现方案中，根据一些资料简单制定了一些实现方案，该文简单介绍下pathview方案的实现过程 Read on &rarr; android, pdf &hellip;">
+	
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="baidu-site-verification" content="4uVEsGeeHG" />
+  <meta name="google-site-verification" content="RF1uUMXanCzUMdaFqAcD1EUdurAKJag8L8CqWylzCb0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="Pangff's Blog" type="application/atom+xml">
+	
+	<link rel="canonical" href="http://www.pffair.com/posts/2/">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700' rel='stylesheet' type='text/css'>
+	
+</head>
+
+
+<body>
+	<div class="container">
+		<div class="left-col">
+			<div class="intrude-less">
+			<header id="header" class="inner"><div class="profilepic">	
+	<script src="/javascripts/md5.js"></script>
+	<script type="text/javascript">
+		document.write("<img src='/images/avatar.jpg' alt='Profile Picture' style='width: 160px;' />");
+	</script>
+</div>
+<h1><a href="/">Pangff's Blog</a></h1>
+<p class="subtitle">stay foolish stay hungry.</p>
+<nav id="main-nav">
+<form action="http://www.pffair.com/search" method="get">
+    <input class="search" name="query" type="text" placeholder="Search..."/>
+</form>
+
+<ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+	<li><a href="/about">About</a></li>
+</ul>
+</nav>
+<nav id="sub-nav">
+	<div class="social">
+		
+		
+		
+		
+		
+		<a class="github" href="https://github.com/pangff" title="GitHub">GitHub</a>
+		
+		
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</nav>
+<gcse:search></gcse:search>
+<section>
+  <h1></h1>
+  <ul id="categories">
+    <li class='category'><a href='/blog/categories/3d/'>3d (3)</a></li>
+<li class='category'><a href='/blog/categories/android/'>android (26)</a></li>
+<li class='category'><a href='/blog/categories/docker/'>docker (6)</a></li>
+<li class='category'><a href='/blog/categories/filechooser/'>filechooser (1)</a></li>
+<li class='category'><a href='/blog/categories/js/'>js (1)</a></li>
+<li class='category'><a href='/blog/categories/pathview/'>pathview (1)</a></li>
+<li class='category'><a href='/blog/categories/pdf/'>pdf (1)</a></li>
+<li class='category'><a href='/blog/categories/react/'>react (1)</a></li>
+<li class='category'><a href='/blog/categories/redux/'>redux (1)</a></li>
+<li class='category'><a href='/blog/categories/svg/'>svg (2)</a></li>
+<li class='category'><a href='/blog/categories/tomcat/'>tomcat (1)</a></li>
+<li class='category'><a href='/blog/categories/turn/'>turn (1)</a></li>
+<li class='category'><a href='/blog/categories/vectordrawable/'>vectordrawable (1)</a></li>
+<li class='category'><a href='/blog/categories/webrtc/'>webrtc (1)</a></li>
+<li class='category'><a href='/blog/categories/webview/'>webview (1)</a></li>
+<li class='category'><a href='/blog/categories/bei-wang/'>备忘 (3)</a></li>
+<li class='category'><a href='/blog/categories/xing-neng-you-hua/'>性能优化 (2)</a></li>
+<li class='category'><a href='/blog/categories/fu-wu-duan/'>服务端 (1)</a></li>
+<li class='category'><a href='/blog/categories/shi-liang-tu/'>矢量图 (1)</a></li>
+
+  </ul>
+</section>
+
+
+</header>				
+			</div>
+		</div>	
+		<div class="mid-col">
+			
+				
+			
+			<div class="mid-col-container">
+				<div id="content" class="inner">
+<div itemscope itemtype="http://schema.org/Blog">
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-03-24T13:45:54+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/android/'>android</a>, <a class='category' href='/blog/categories/pathview/'>pathview</a>, <a class='category' href='/blog/categories/svg/'>svg</a>, <a class='category' href='/blog/categories/shi-liang-tu/'>矢量图</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2016/03/24/shi-liang-tu-lu-jing-wen-ti-de-pathviewshi-xian-fang-an/" itemprop="url">矢量图路径问题的pathview实现方案</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>在前面博客<a href="http://www.pffair.com/blog/categories/svg/">关于矢量路线图动态路径在Android实现方案</a>中，根据一些资料简单制定了一些实现方案，该文简单介绍下pathview方案的实现过程</p>
+
+
+		
+		<a href="/blog/2016/03/24/shi-liang-tu-lu-jing-wen-ti-de-pathviewshi-xian-fang-an/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-03-12T17:54:51+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/android/'>android</a>, <a class='category' href='/blog/categories/pdf/'>pdf</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2016/03/12/android-pdf/" itemprop="url">Android打开pdf文件</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>项目中有个阅读pdf的需求，总结下几种方案</p>
+
+
+		
+		<a href="/blog/2016/03/12/android-pdf/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-03-11T12:00:42+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/android/'>android</a>, <a class='category' href='/blog/categories/svg/'>svg</a>, <a class='category' href='/blog/categories/vectordrawable/'>vectordrawable</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2016/03/11/svg-android/" itemprop="url">关于矢量路线图动态路径在Android实现方案</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>最近遇到svg路线图渲染问题，查一些资料总结下解决方案</p>
+
+
+		
+		<a href="/blog/2016/03/11/svg-android/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-03-30T10:38:04+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/android/'>android</a>, <a class='category' href='/blog/categories/xing-neng-you-hua/'>性能优化</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2015/03/30/dui-xiang-chi-de-shi-yong/" itemprop="url">对象池的使用</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>在android开发中经常会发现当日志中出现大量GC时我们的应用常常出现卡顿。这是因为当虚拟机进行垃圾回收操作时应用所有线程都会暂停，完成后恢复。如果出现大量GC操作时主线程频繁暂停就会影响应用性能了。所以我们在开发中要尽量避免。</p>
+
+
+		
+		<a href="/blog/2015/03/30/dui-xiang-chi-de-shi-yong/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-03-17T15:52:06+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/android/'>android</a>, <a class='category' href='/blog/categories/xing-neng-you-hua/'>性能优化</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2015/03/17/nei-cun-xie-lou-de-jian-ce-yu-xiu-fu/" itemprop="url">内存泄漏的监测与修复</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>在android开发中，我们经常会遇到OutOfMemory的问题。有的由于listview中没有通过ViewHolder复用item，有的由于图片过大没有压缩，当然最多的还是由于我们在开发中不小心造成的内存泄漏。结合本人的开发经验，下面我们来重点看下如何监测我们的内存泄漏问题以及如何定位解决它。</p>
+
+
+		
+		<a href="/blog/2015/03/17/nei-cun-xie-lou-de-jian-ce-yu-xiu-fu/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-03-10T14:26:54+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/android/'>android</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2015/03/10/hun-yao-hou-dai-ma-yi-chang-chu-li/" itemprop="url">混淆后代码异常处理</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>release版本的apk经常会通过一些三方统计平台（比如友盟、flurry等等）进行错误收集。然而由于release版本一般要通过混淆，混淆后的异常堆栈很难读取。该如何处理呢？</p>
+
+
+		
+		<a href="/blog/2015/03/10/hun-yao-hou-dai-ma-yi-chang-chu-li/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-01-30T14:49:51+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/android/'>android</a>, <a class='category' href='/blog/categories/bei-wang/'>备忘</a>, <a class='category' href='/blog/categories/fu-wu-duan/'>服务端</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2015/01/30/jenkinsfu-wu-qi-da-bao/" itemprop="url">Jenkins服务器打包</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>android项目中要批量多渠道打包，所以使用了ant脚本。但是因为每个人本地环境不同、操作系统不同经常要修改打包文件，而且每次打包都要占用一定时间。为了减少重复工作方便任何人无障碍打包，就要将打包环境部署到服务器，而且使用jenkins持续集成更加方便。下面简单说下部署步骤。</p>
+
+
+		
+		<a href="/blog/2015/01/30/jenkinsfu-wu-qi-da-bao/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-01-30T14:02:01+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/bei-wang/'>备忘</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2015/01/30/octopress-chang-yong-ming-ling/" itemprop="url">Octopress 常用命令</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>好久不用octopress了，再用的时候发现命令都忘了，这里纪录下常用的命令，备忘。</p>
+
+
+		
+		<a href="/blog/2015/01/30/octopress-chang-yong-ming-ling/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-07-24T18:30:28+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/android/'>android</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2014/07/24/tang-android-l-preview/" itemprop="url">趟Android L</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>android L 发布一段时间了，抽时间趟了一下，做一下总结。</p>
+
+
+		
+		<a href="/blog/2014/07/24/tang-android-l-preview/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-07-11T19:07:06+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/android/'>android</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2014/07/11/textviewjiang-wen-ben-hua-dao-zhi-ding-wei-zhi/" itemprop="url">Canvas将文本画到指定位置</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>经常会遇到使用Canvas绘制文字的情况，但是我们会发现使用canvas.drawText(&ldquo;string&rdquo;,x,y,paint)的时候画出的效果不是想象中按文字左上角坐标来的。那么文字位置究竟是怎么样的呢？</p>
+
+
+		
+		<a href="/blog/2014/07/11/textviewjiang-wen-ben-hua-dao-zhi-ding-wei-zhi/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+</div>
+<nav id="pagenavi">
+    
+        <a href="1" class="prev">Prev</a>
+    
+    
+        <a href="3" class="next">Next</a>
+    
+    <div class="center"><a href="/blog/archives">Blog Archives</a></div>
+</nav></div>
+			</div>
+			<footer id="footer" class="inner">Copyright &copy; 2021
+
+    pangff
+
+<a href="https://beian.miit.gov.cn/">京ICP备14050056号-1</a>
+
+Design credit: <a href="http://shashankmehta.in/archive/2012/greyshade.html">Shashank Mehta</a>
+<script type="text/javascript">
+var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_1000501877'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s4.cnzz.com/z_stat.php%3Fid%3D1000501877%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));
+</script></footer>
+			<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-52176210-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+		</div>
+	</div>
+</body>
+</html>

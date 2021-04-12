@@ -1,0 +1,276 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Rajawali入门 - Pangff's Blog</title>
+	<meta name="author" content="pangff">
+
+	
+	<meta name="description" content="Rajawali入门 rajawali是Android OpenGL ES 2.0/3.0引擎。https://github.com/MasDennis/Rajawali 正确的加载rajawali 首先要导入rajawali库 然后，可以创建自己项目（最简单的helloworld），注意， &hellip;">
+	
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="baidu-site-verification" content="4uVEsGeeHG" />
+  <meta name="google-site-verification" content="RF1uUMXanCzUMdaFqAcD1EUdurAKJag8L8CqWylzCb0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="Pangff's Blog" type="application/atom+xml">
+	
+	<link rel="canonical" href="http://www.pffair.com/blog/2014/06/19/rajawaliru-men/">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700' rel='stylesheet' type='text/css'>
+	
+</head>
+
+
+<body>
+	<div class="container">
+		<div class="left-col">
+			<div class="intrude-less">
+			<header id="header" class="inner"><div class="profilepic">	
+	<script src="/javascripts/md5.js"></script>
+	<script type="text/javascript">
+		document.write("<img src='/images/avatar.jpg' alt='Profile Picture' style='width: 160px;' />");
+	</script>
+</div>
+<h1><a href="/">Pangff's Blog</a></h1>
+<p class="subtitle">stay foolish stay hungry.</p>
+<nav id="main-nav">
+<form action="http://www.pffair.com/search" method="get">
+    <input class="search" name="query" type="text" placeholder="Search..."/>
+</form>
+
+<ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+	<li><a href="/about">About</a></li>
+</ul>
+</nav>
+<nav id="sub-nav">
+	<div class="social">
+		
+		
+		
+		
+		
+		<a class="github" href="https://github.com/pangff" title="GitHub">GitHub</a>
+		
+		
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</nav>
+<gcse:search></gcse:search>
+<section>
+  <h1></h1>
+  <ul id="categories">
+    <li class='category'><a href='/blog/categories/3d/'>3d (3)</a></li>
+<li class='category'><a href='/blog/categories/android/'>android (26)</a></li>
+<li class='category'><a href='/blog/categories/docker/'>docker (6)</a></li>
+<li class='category'><a href='/blog/categories/filechooser/'>filechooser (1)</a></li>
+<li class='category'><a href='/blog/categories/js/'>js (1)</a></li>
+<li class='category'><a href='/blog/categories/pathview/'>pathview (1)</a></li>
+<li class='category'><a href='/blog/categories/pdf/'>pdf (1)</a></li>
+<li class='category'><a href='/blog/categories/react/'>react (1)</a></li>
+<li class='category'><a href='/blog/categories/redux/'>redux (1)</a></li>
+<li class='category'><a href='/blog/categories/svg/'>svg (2)</a></li>
+<li class='category'><a href='/blog/categories/tomcat/'>tomcat (1)</a></li>
+<li class='category'><a href='/blog/categories/turn/'>turn (1)</a></li>
+<li class='category'><a href='/blog/categories/vectordrawable/'>vectordrawable (1)</a></li>
+<li class='category'><a href='/blog/categories/webrtc/'>webrtc (1)</a></li>
+<li class='category'><a href='/blog/categories/webview/'>webview (1)</a></li>
+<li class='category'><a href='/blog/categories/bei-wang/'>备忘 (3)</a></li>
+<li class='category'><a href='/blog/categories/xing-neng-you-hua/'>性能优化 (2)</a></li>
+<li class='category'><a href='/blog/categories/fu-wu-duan/'>服务端 (1)</a></li>
+<li class='category'><a href='/blog/categories/shi-liang-tu/'>矢量图 (1)</a></li>
+
+  </ul>
+</section>
+
+
+</header>				
+			</div>
+		</div>	
+		<div class="mid-col">
+			
+				
+			
+			<div class="mid-col-container">
+				<div id="content" class="inner"><article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+	<h1 class="title" itemprop="name">Rajawali入门</h1>
+	<div class="entry-content" itemprop="articleBody"><p>rajawali是Android OpenGL ES 2.0/3.0引擎。<a href="https://github.com/MasDennis/Rajawali">https://github.com/MasDennis/Rajawali</a></p>
+
+<!--more-->
+
+
+<h4>正确的加载rajawali</h4>
+
+<p>首先要导入rajawali库</p>
+
+<p>然后，可以创建自己项目（最简单的helloworld），注意，一定要sdk17，也就是android 4.2，因为rajawali最新版本使用了该版本下的dreamservice（DayDream），当然，你也可以切换到v0.9版本，这样兼容到android 2.3。</p>
+
+<p>修改继承关系，Activity改为RajawaliActivity。这时候就可以测试了，应该没有报错的跑起来，虽然和以前的hello world显示是一样的。</p>
+
+<h4>把Render跑起来，啥也不画</h4>
+
+<p>创建一个Render类，要继承RajawaliRenderer，继承就行了，啥也不用干（得写个构造方法）。</p>
+
+<p>然后，在m0创建的activity中：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">private</span> <span class="n">MyRenderer</span> <span class="n">myRenderer</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'> <span class="cm">/**</span>
+</span><span class='line'><span class="cm">  * Called when the activity is first created.</span>
+</span><span class='line'><span class="cm">  */</span>
+</span><span class='line'> <span class="nd">@Override</span>
+</span><span class='line'> <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onCreate</span><span class="o">(</span><span class="n">Bundle</span> <span class="n">savedInstanceState</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>     <span class="kd">super</span><span class="o">.</span><span class="na">onCreate</span><span class="o">(</span><span class="n">savedInstanceState</span><span class="o">);</span>
+</span><span class='line'>   <span class="n">myRenderer</span><span class="o">=</span><span class="k">new</span> <span class="nf">MyRenderer</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>
+</span><span class='line'>   <span class="n">myRenderer</span><span class="o">.</span><span class="na">setSurfaceView</span><span class="o">(</span><span class="n">mSurfaceView</span><span class="o">);</span>
+</span><span class='line'>     <span class="kd">super</span><span class="o">.</span><span class="na">setRenderer</span><span class="o">(</span><span class="n">myRenderer</span><span class="o">);</span>
+</span><span class='line'> <span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>再次执行，会发现啥也没显示，但是不报错，ok，就是这个效果。</p>
+
+<h4>画个球</h4>
+
+<p>如果参照当前官网turorial01，肯定是不行了，首先是已经没有DiffuseMaterial类了。另外，原文给的代码链接已经失效。必须找到</p>
+
+<pre><code>https://github.com/MasDennis/RajawaliExamples 
+</code></pre>
+
+<p>从这里找到需要的图和代码。</p>
+
+<p>不过当前Examples项目使用的是Fragment，我转到自己简单的代码中，发现光效是无效的。索性在m2中暂时不加入光效。（光效是出不来的了，我测试了Examples项目，问题是一样的）。</p>
+
+<h4>给球加上灯光</h4>
+
+<p>参照最新Examples项目的DirectionalLight示例，给地球加上了灯光。主要是这句话：</p>
+
+<pre><code> material.setDiffuseMethod(new DiffuseMethod.Lambert());
+</code></pre>
+
+<h4>凹凸纹理贴图</h4>
+
+<p>凹凸纹理，需要两张图：</p>
+
+<ul>
+<li> 1张颜色纹理图（就是只有颜色，不包含阴影和凹凸信息），也叫做漫射图（通过漫反射看到的效果）</li>
+<li> 1张凹凸纹理图，一般是法线纹理，特点是1张发蓝色的图（它本身不代表颜色，只是借用RGB表示XYZ法线方向）</li>
+</ul>
+
+
+<p>贴图本身不复杂（其实复杂，复杂的部分引擎代劳了，就是怎么计算像素点最终的颜色值，要综合颜色图以及法线方向等等因素）。</p>
+
+<p>代码上只是增加2个纹理即可：</p>
+
+<pre><code> material.addTexture(new Texture("surfaceTexture",surface));
+ material.addTexture(new NormalMapTexture("normalTexture", normal));
+</code></pre>
+
+<p>源代码在这里：</p>
+
+<pre><code>https://github.com/MarshalW/Planets/tree/m4 
+</code></pre>
+</div>
+
+</article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style addthis_16x16_style">
+	
+	
+	
+	
+	
+	<a class="addthis_button_compact"></a>
+	<a class="addthis_counter addthis_bubble_style"></a>
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/300/addthis_widget.js#pubid="></script>
+</div>
+
+
+
+  <section>
+    <h1>评论</h1>
+    <div id="comments" aria-live="polite"><!-- Duoshuo Comment BEGIN -->
+<div class="ds-thread"></div>
+<script type="text/javascript">
+  var duoshuoQuery = {short_name:"pffair"};
+  (function() {
+    var ds = document.createElement('script');
+    ds.type = 'text/javascript';ds.async = true;
+    ds.src = 'http://static.duoshuo.com/embed.js';
+    ds.charset = 'UTF-8';
+    (document.getElementsByTagName('head')[0] 
+    || document.getElementsByTagName('body')[0]).appendChild(ds);
+  })();
+</script>
+<!-- Duoshuo Comment END --></div>
+  </section>
+</div>
+			</div>
+			<footer id="footer" class="inner">Copyright &copy; 2021
+
+    pangff
+
+<a href="https://beian.miit.gov.cn/">京ICP备14050056号-1</a>
+
+Design credit: <a href="http://shashankmehta.in/archive/2012/greyshade.html">Shashank Mehta</a>
+<script type="text/javascript">
+var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_1000501877'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s4.cnzz.com/z_stat.php%3Fid%3D1000501877%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));
+</script></footer>
+			<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-52176210-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+		</div>
+	</div>
+</body>
+</html>

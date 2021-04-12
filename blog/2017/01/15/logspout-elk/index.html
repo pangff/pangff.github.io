@@ -1,0 +1,307 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>logspout-elk - Pangff's Blog</title>
+	<meta name="author" content="pangff">
+
+	
+	<meta name="description" content="Logspout-elk 接上篇elk-docker，在docker swarm环境部署好了elk，如何在swarm环境进行日志收集呢？本文使用logspout进行swarm中每个节点的日志收集并发送给logstash，logstash将日志存入elasticsearch中， &hellip;">
+	
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="baidu-site-verification" content="4uVEsGeeHG" />
+  <meta name="google-site-verification" content="RF1uUMXanCzUMdaFqAcD1EUdurAKJag8L8CqWylzCb0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="Pangff's Blog" type="application/atom+xml">
+	
+	<link rel="canonical" href="http://www.pffair.com/blog/2017/01/15/logspout-elk/">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700' rel='stylesheet' type='text/css'>
+	
+</head>
+
+
+<body>
+	<div class="container">
+		<div class="left-col">
+			<div class="intrude-less">
+			<header id="header" class="inner"><div class="profilepic">	
+	<script src="/javascripts/md5.js"></script>
+	<script type="text/javascript">
+		document.write("<img src='/images/avatar.jpg' alt='Profile Picture' style='width: 160px;' />");
+	</script>
+</div>
+<h1><a href="/">Pangff's Blog</a></h1>
+<p class="subtitle">stay foolish stay hungry.</p>
+<nav id="main-nav">
+<form action="http://www.pffair.com/search" method="get">
+    <input class="search" name="query" type="text" placeholder="Search..."/>
+</form>
+
+<ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+	<li><a href="/about">About</a></li>
+</ul>
+</nav>
+<nav id="sub-nav">
+	<div class="social">
+		
+		
+		
+		
+		
+		<a class="github" href="https://github.com/pangff" title="GitHub">GitHub</a>
+		
+		
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</nav>
+<gcse:search></gcse:search>
+<section>
+  <h1></h1>
+  <ul id="categories">
+    <li class='category'><a href='/blog/categories/3d/'>3d (3)</a></li>
+<li class='category'><a href='/blog/categories/android/'>android (26)</a></li>
+<li class='category'><a href='/blog/categories/docker/'>docker (6)</a></li>
+<li class='category'><a href='/blog/categories/filechooser/'>filechooser (1)</a></li>
+<li class='category'><a href='/blog/categories/js/'>js (1)</a></li>
+<li class='category'><a href='/blog/categories/pathview/'>pathview (1)</a></li>
+<li class='category'><a href='/blog/categories/pdf/'>pdf (1)</a></li>
+<li class='category'><a href='/blog/categories/react/'>react (1)</a></li>
+<li class='category'><a href='/blog/categories/redux/'>redux (1)</a></li>
+<li class='category'><a href='/blog/categories/svg/'>svg (2)</a></li>
+<li class='category'><a href='/blog/categories/tomcat/'>tomcat (1)</a></li>
+<li class='category'><a href='/blog/categories/turn/'>turn (1)</a></li>
+<li class='category'><a href='/blog/categories/vectordrawable/'>vectordrawable (1)</a></li>
+<li class='category'><a href='/blog/categories/webrtc/'>webrtc (1)</a></li>
+<li class='category'><a href='/blog/categories/webview/'>webview (1)</a></li>
+<li class='category'><a href='/blog/categories/bei-wang/'>备忘 (3)</a></li>
+<li class='category'><a href='/blog/categories/xing-neng-you-hua/'>性能优化 (2)</a></li>
+<li class='category'><a href='/blog/categories/fu-wu-duan/'>服务端 (1)</a></li>
+<li class='category'><a href='/blog/categories/shi-liang-tu/'>矢量图 (1)</a></li>
+
+  </ul>
+</section>
+
+
+</header>				
+			</div>
+		</div>	
+		<div class="mid-col">
+			
+				
+			
+			<div class="mid-col-container">
+				<div id="content" class="inner"><article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+	<h1 class="title" itemprop="name">Logspout-elk</h1>
+	<div class="entry-content" itemprop="articleBody"><p>接上篇<a href="http://www.pffair.com/blog/2017/01/12/elk-docker/">elk-docker</a>，在docker swarm环境部署好了elk，如何在swarm环境进行日志收集呢？本文使用logspout进行swarm中每个节点的日志收集并发送给logstash，logstash将日志存入elasticsearch中，kinana从elasticsearch读取日志信息进行展示。</p>
+
+<!--more-->
+
+
+<h3>创建logspout service</h3>
+
+<p>使用以下命令进行logspout service创建</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name logspout \
+</span><span class='line'>    --network elk \
+</span><span class='line'>    --mode global \
+</span><span class='line'>    --mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock" \
+</span><span class='line'>    -e SYSLOG_FORMAT=rfc3164 \
+</span><span class='line'>    gliderlabs/logspout syslog://logstash:51415
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>创建global的logspout servive因为我们要在每一container上进行日志监控。将logspout service加入elk network，以便于和之前的logstash service进行通信。在服务启动的时候执行syslog://logstash:51415告诉logspout我们要使用syslog协议发送日志到在51415端口运行的logstash</p>
+
+<p>查看logspout service状态</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service ps logspout</span></code></pre></td></tr></table></div></figure>
+
+
+<p><img src="http://www.pffair.com/images/64.png" alt="" /></p>
+
+<p>等到logspout启动完成。我们用一个小例子看看logspout是否真的把日志发送给了logspout。<a href="https://github.com/MarshalW/hello-service">例子代码</a></p>
+
+<p>创建基于restify的 <a href="(https://github.com/MarshalW/hello-service">hello-service</a>)</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create -p 3000:3000 --name hello-service marshalw/hello-service:0.1.0
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>查看hello-service状态</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service ps hello-service
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>等待hello-service完全启动后，运行查下</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>open http://$(docker-machine ip es-swarm-1):3000/hello/name
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>通过以下几个命令查看logstash对应container的日志</p>
+
+<p>用以下查看当前节点全部container信息，并找到logstash对应 container id</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker ps -a
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>用以下命令查看logstash日志信息（命令中65b7825aef55是上面找到的logstash container id）</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker logs 65b7825aef55
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>可以发现以下日志条目。（因为我们的logstash是global的，每次日志发送不一定发送到了当前节点的logstash上来，要么通过多访问几次hello-service的方式，要么发现本节点没有就去另外的节点按相同方法找）</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>{
+</span><span class='line'>           "message" =&gt; "restify listening at http://[::]:3000\n",
+</span><span class='line'>          "@version" =&gt; "1",
+</span><span class='line'>        "@timestamp" =&gt; "2017-01-15T12:09:18.000Z",
+</span><span class='line'>              "host" =&gt; "10.0.0.12",
+</span><span class='line'>          "priority" =&gt; 14,
+</span><span class='line'>     "timestamp8601" =&gt; "2017-01-15T12:09:18Z",
+</span><span class='line'>         "logsource" =&gt; "65b7825aef55",
+</span><span class='line'>           "program" =&gt; "hello-service.1.9zdbccrwv7q7yj8qpeg82kbr6",
+</span><span class='line'>               "pid" =&gt; "12204",
+</span><span class='line'>          "severity" =&gt; 6,
+</span><span class='line'>          "facility" =&gt; 1,
+</span><span class='line'>         "timestamp" =&gt; "2017-01-15T12:09:18Z",
+</span><span class='line'>    "facility_label" =&gt; "user-level",
+</span><span class='line'>    "severity_label" =&gt; "Informational"
+</span><span class='line'>}
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>说明我们hello-service的日志的确是发送到了logstash中。</p>
+
+<p>运行</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>open http://$(docker-machine ip es-swarm-1)/app/kibana</span></code></pre></td></tr></table></div></figure>
+
+
+<p>启动kibana，配置一个index可以在kibanna中看到我们hello-service的访问日志</p>
+</div>
+
+</article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style addthis_16x16_style">
+	
+	
+	
+	
+	
+	<a class="addthis_button_compact"></a>
+	<a class="addthis_counter addthis_bubble_style"></a>
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/300/addthis_widget.js#pubid="></script>
+</div>
+
+
+
+  <section>
+    <h1>评论</h1>
+    <div id="comments" aria-live="polite"><!-- Duoshuo Comment BEGIN -->
+<div class="ds-thread"></div>
+<script type="text/javascript">
+  var duoshuoQuery = {short_name:"pffair"};
+  (function() {
+    var ds = document.createElement('script');
+    ds.type = 'text/javascript';ds.async = true;
+    ds.src = 'http://static.duoshuo.com/embed.js';
+    ds.charset = 'UTF-8';
+    (document.getElementsByTagName('head')[0] 
+    || document.getElementsByTagName('body')[0]).appendChild(ds);
+  })();
+</script>
+<!-- Duoshuo Comment END --></div>
+  </section>
+</div>
+			</div>
+			<footer id="footer" class="inner">Copyright &copy; 2021
+
+    pangff
+
+<a href="https://beian.miit.gov.cn/">京ICP备14050056号-1</a>
+
+Design credit: <a href="http://shashankmehta.in/archive/2012/greyshade.html">Shashank Mehta</a>
+<script type="text/javascript">
+var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_1000501877'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s4.cnzz.com/z_stat.php%3Fid%3D1000501877%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));
+</script></footer>
+			<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-52176210-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+		</div>
+	</div>
+</body>
+</html>

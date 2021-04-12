@@ -1,0 +1,308 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>ActionBar Tabs改头换面 - Pangff's Blog</title>
+	<meta name="author" content="pangff">
+
+	
+	<meta name="description" content="ActionBar Tabs改头换面 先看效果 修改后 第一眼看上去上面的导航不像个ActionBar的Tabs，但是这个的确是用ActionBar实现的 看下具体的实现，实现方式主要是覆盖ActionBar的原有style，下面是需要覆盖的样式 1
+2
+3
+4
+5
+6
+7 &lt;style &hellip;">
+	
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="baidu-site-verification" content="4uVEsGeeHG" />
+  <meta name="google-site-verification" content="RF1uUMXanCzUMdaFqAcD1EUdurAKJag8L8CqWylzCb0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="Pangff's Blog" type="application/atom+xml">
+	
+	<link rel="canonical" href="http://www.pffair.com/blog/2014/06/19/actionbar-tabsgai-tou-huan-mian/">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700' rel='stylesheet' type='text/css'>
+	
+</head>
+
+
+<body>
+	<div class="container">
+		<div class="left-col">
+			<div class="intrude-less">
+			<header id="header" class="inner"><div class="profilepic">	
+	<script src="/javascripts/md5.js"></script>
+	<script type="text/javascript">
+		document.write("<img src='/images/avatar.jpg' alt='Profile Picture' style='width: 160px;' />");
+	</script>
+</div>
+<h1><a href="/">Pangff's Blog</a></h1>
+<p class="subtitle">stay foolish stay hungry.</p>
+<nav id="main-nav">
+<form action="http://www.pffair.com/search" method="get">
+    <input class="search" name="query" type="text" placeholder="Search..."/>
+</form>
+
+<ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+	<li><a href="/about">About</a></li>
+</ul>
+</nav>
+<nav id="sub-nav">
+	<div class="social">
+		
+		
+		
+		
+		
+		<a class="github" href="https://github.com/pangff" title="GitHub">GitHub</a>
+		
+		
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</nav>
+<gcse:search></gcse:search>
+<section>
+  <h1></h1>
+  <ul id="categories">
+    <li class='category'><a href='/blog/categories/3d/'>3d (3)</a></li>
+<li class='category'><a href='/blog/categories/android/'>android (26)</a></li>
+<li class='category'><a href='/blog/categories/docker/'>docker (6)</a></li>
+<li class='category'><a href='/blog/categories/filechooser/'>filechooser (1)</a></li>
+<li class='category'><a href='/blog/categories/js/'>js (1)</a></li>
+<li class='category'><a href='/blog/categories/pathview/'>pathview (1)</a></li>
+<li class='category'><a href='/blog/categories/pdf/'>pdf (1)</a></li>
+<li class='category'><a href='/blog/categories/react/'>react (1)</a></li>
+<li class='category'><a href='/blog/categories/redux/'>redux (1)</a></li>
+<li class='category'><a href='/blog/categories/svg/'>svg (2)</a></li>
+<li class='category'><a href='/blog/categories/tomcat/'>tomcat (1)</a></li>
+<li class='category'><a href='/blog/categories/turn/'>turn (1)</a></li>
+<li class='category'><a href='/blog/categories/vectordrawable/'>vectordrawable (1)</a></li>
+<li class='category'><a href='/blog/categories/webrtc/'>webrtc (1)</a></li>
+<li class='category'><a href='/blog/categories/webview/'>webview (1)</a></li>
+<li class='category'><a href='/blog/categories/bei-wang/'>备忘 (3)</a></li>
+<li class='category'><a href='/blog/categories/xing-neng-you-hua/'>性能优化 (2)</a></li>
+<li class='category'><a href='/blog/categories/fu-wu-duan/'>服务端 (1)</a></li>
+<li class='category'><a href='/blog/categories/shi-liang-tu/'>矢量图 (1)</a></li>
+
+  </ul>
+</section>
+
+
+</header>				
+			</div>
+		</div>	
+		<div class="mid-col">
+			
+				
+			
+			<div class="mid-col-container">
+				<div id="content" class="inner"><article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+	<h1 class="title" itemprop="name">ActionBar Tabs改头换面</h1>
+	<div class="entry-content" itemprop="articleBody"><p>先看效果</p>
+
+<p><img src="http://www.pffair.com/images/17.png" alt="修改前" /></p>
+
+<p>修改后</p>
+
+<p><img src="http://www.pffair.com/images/18.png" alt="修改前" /></p>
+
+<p>第一眼看上去上面的导航不像个ActionBar的Tabs，但是这个的确是用ActionBar实现的</p>
+
+<!--more-->
+
+
+<p>看下具体的实现，实现方式主要是覆盖ActionBar的原有style，下面是需要覆盖的样式</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'> <span class="nt">&lt;style</span> <span class="na">name=</span><span class="s">&quot;AppTheme&quot;</span> <span class="na">parent=</span><span class="s">&quot;AppBaseTheme&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>     <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:windowContentOverlay&quot;</span><span class="nt">&gt;</span>@null<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>     <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:actionBarStyle&quot;</span><span class="nt">&gt;</span>@style/MyActionBar<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>     <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:actionBarTabBarStyle&quot;</span><span class="nt">&gt;</span>@style/MyActionBarTabBarStyle<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>     <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:actionBarTabStyle&quot;</span><span class="nt">&gt;</span>@style/MyActionBarTabStyle<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>     <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:actionBarTabTextStyle&quot;</span><span class="nt">&gt;</span>@style/Widget.Holo.ActionBar.TabText<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'> <span class="nt">&lt;/style&gt;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>首先来设置ActionBar的背景</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'><span class="nt">&lt;style</span> <span class="na">name=</span><span class="s">&quot;MyActionBar&quot;</span> <span class="na">parent=</span><span class="s">&quot;@android:style/Widget.Holo.ActionBar&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>        <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:windowActionBarOverlay&quot;</span><span class="nt">&gt;</span>true<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>         <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:height&quot;</span><span class="nt">&gt;</span>80px<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>        <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:background&quot;</span><span class="nt">&gt;</span>@drawable/actionbar_bg<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>        <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:backgroundStacked&quot;</span><span class="nt">&gt;</span>@drawable/actionbar_bg<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>        <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:backgroundSplit&quot;</span><span class="nt">&gt;</span>@drawable/actionbar_bg<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;/style&gt;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>其次来去掉ActionBar下面的阴影，使得整体页面的背景可以和ActionBar进行拼接</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'><span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:windowContentOverlay&quot;</span><span class="nt">&gt;</span>@null<span class="nt">&lt;/item&gt;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>接下来去掉Tabs直线的分隔竖线</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'><span class="nt">&lt;style</span> <span class="na">name=</span><span class="s">&quot;MyActionBarTabBarStyle&quot;</span> <span class="na">parent=</span><span class="s">&quot;@android:style/Widget.Holo.ActionBar.TabBar&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>       <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:divider&quot;</span><span class="nt">&gt;</span>?android:attr/actionBarDivider<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>       <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:showDividers&quot;</span><span class="nt">&gt;</span>none<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>       <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:paddingLeft&quot;</span><span class="nt">&gt;</span>80px<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>       <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:dividerPadding&quot;</span><span class="nt">&gt;</span>24dip<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>   <span class="nt">&lt;/style&gt;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>接下来修改Tabs选中后下面的横条</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'><span class="nt">&lt;style</span> <span class="na">name=</span><span class="s">&quot;MyActionBarTabStyle&quot;</span> <span class="na">parent=</span><span class="s">&quot;@android:style/Widget.Holo.ActionBar.TabView&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>        <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:paddingTop&quot;</span><span class="nt">&gt;</span>35px<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>        <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:background&quot;</span><span class="nt">&gt;</span>@drawable/antionbar_tab<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>        <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:paddingStart&quot;</span><span class="nt">&gt;</span>16dip<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>        <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:paddingEnd&quot;</span><span class="nt">&gt;</span>16dip<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;/style&gt;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>最后调整Tabs上文字颜色和大小</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'><span class="nt">&lt;style</span> <span class="na">name=</span><span class="s">&quot;Widget.Holo.ActionBar.TabText&quot;</span> <span class="na">parent=</span><span class="s">&quot;@android:style/Widget.ActionBar.TabText&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>      <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:textColor&quot;</span><span class="nt">&gt;</span>@android:color/white<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>      <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:textSize&quot;</span><span class="nt">&gt;</span>24px<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>      <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:textStyle&quot;</span><span class="nt">&gt;</span>bold<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>      <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:textAllCaps&quot;</span><span class="nt">&gt;</span>true<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>      <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:ellipsize&quot;</span><span class="nt">&gt;</span>marquee<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>      <span class="nt">&lt;item</span> <span class="na">name=</span><span class="s">&quot;android:maxLines&quot;</span><span class="nt">&gt;</span>1<span class="nt">&lt;/item&gt;</span>
+</span><span class='line'>  <span class="nt">&lt;/style&gt;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+</div>
+
+</article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style addthis_16x16_style">
+	
+	
+	
+	
+	
+	<a class="addthis_button_compact"></a>
+	<a class="addthis_counter addthis_bubble_style"></a>
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/300/addthis_widget.js#pubid="></script>
+</div>
+
+
+
+  <section>
+    <h1>评论</h1>
+    <div id="comments" aria-live="polite"><!-- Duoshuo Comment BEGIN -->
+<div class="ds-thread"></div>
+<script type="text/javascript">
+  var duoshuoQuery = {short_name:"pffair"};
+  (function() {
+    var ds = document.createElement('script');
+    ds.type = 'text/javascript';ds.async = true;
+    ds.src = 'http://static.duoshuo.com/embed.js';
+    ds.charset = 'UTF-8';
+    (document.getElementsByTagName('head')[0] 
+    || document.getElementsByTagName('body')[0]).appendChild(ds);
+  })();
+</script>
+<!-- Duoshuo Comment END --></div>
+  </section>
+</div>
+			</div>
+			<footer id="footer" class="inner">Copyright &copy; 2021
+
+    pangff
+
+<a href="https://beian.miit.gov.cn/">京ICP备14050056号-1</a>
+
+Design credit: <a href="http://shashankmehta.in/archive/2012/greyshade.html">Shashank Mehta</a>
+<script type="text/javascript">
+var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_1000501877'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s4.cnzz.com/z_stat.php%3Fid%3D1000501877%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));
+</script></footer>
+			<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-52176210-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+		</div>
+	</div>
+</body>
+</html>

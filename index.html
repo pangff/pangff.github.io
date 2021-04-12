@@ -1,0 +1,530 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Pangff's Blog</title>
+	<meta name="author" content="pangff">
+
+	
+	<meta name="description" content="docker Logspout-redis-elk 接上篇logspout-elk.我们在上篇中完成了使用logspout收集docker日志并发送到logstash中。本文在之前的基础上在logspout到logstash之间添加了redis消息队列。 Read on &rarr; &hellip;">
+	
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="baidu-site-verification" content="4uVEsGeeHG" />
+  <meta name="google-site-verification" content="RF1uUMXanCzUMdaFqAcD1EUdurAKJag8L8CqWylzCb0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="Pangff's Blog" type="application/atom+xml">
+	
+	<link rel="canonical" href="http://www.pffair.com/">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700' rel='stylesheet' type='text/css'>
+	
+</head>
+
+
+<body>
+	<div class="container">
+		<div class="left-col">
+			<div class="intrude-less">
+			<header id="header" class="inner"><div class="profilepic">	
+	<script src="/javascripts/md5.js"></script>
+	<script type="text/javascript">
+		document.write("<img src='/images/avatar.jpg' alt='Profile Picture' style='width: 160px;' />");
+	</script>
+</div>
+<h1><a href="/">Pangff's Blog</a></h1>
+<p class="subtitle">stay foolish stay hungry.</p>
+<nav id="main-nav">
+<form action="http://www.pffair.com/search" method="get">
+    <input class="search" name="query" type="text" placeholder="Search..."/>
+</form>
+
+<ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+	<li><a href="/about">About</a></li>
+</ul>
+</nav>
+<nav id="sub-nav">
+	<div class="social">
+		
+		
+		
+		
+		
+		<a class="github" href="https://github.com/pangff" title="GitHub">GitHub</a>
+		
+		
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</nav>
+<gcse:search></gcse:search>
+<section>
+  <h1></h1>
+  <ul id="categories">
+    <li class='category'><a href='/blog/categories/3d/'>3d (3)</a></li>
+<li class='category'><a href='/blog/categories/android/'>android (26)</a></li>
+<li class='category'><a href='/blog/categories/docker/'>docker (6)</a></li>
+<li class='category'><a href='/blog/categories/filechooser/'>filechooser (1)</a></li>
+<li class='category'><a href='/blog/categories/js/'>js (1)</a></li>
+<li class='category'><a href='/blog/categories/pathview/'>pathview (1)</a></li>
+<li class='category'><a href='/blog/categories/pdf/'>pdf (1)</a></li>
+<li class='category'><a href='/blog/categories/react/'>react (1)</a></li>
+<li class='category'><a href='/blog/categories/redux/'>redux (1)</a></li>
+<li class='category'><a href='/blog/categories/svg/'>svg (2)</a></li>
+<li class='category'><a href='/blog/categories/tomcat/'>tomcat (1)</a></li>
+<li class='category'><a href='/blog/categories/turn/'>turn (1)</a></li>
+<li class='category'><a href='/blog/categories/vectordrawable/'>vectordrawable (1)</a></li>
+<li class='category'><a href='/blog/categories/webrtc/'>webrtc (1)</a></li>
+<li class='category'><a href='/blog/categories/webview/'>webview (1)</a></li>
+<li class='category'><a href='/blog/categories/bei-wang/'>备忘 (3)</a></li>
+<li class='category'><a href='/blog/categories/xing-neng-you-hua/'>性能优化 (2)</a></li>
+<li class='category'><a href='/blog/categories/fu-wu-duan/'>服务端 (1)</a></li>
+<li class='category'><a href='/blog/categories/shi-liang-tu/'>矢量图 (1)</a></li>
+
+  </ul>
+</section>
+
+
+</header>				
+			</div>
+		</div>	
+		<div class="mid-col">
+			
+				
+			
+			<div class="mid-col-container">
+				<div id="content" class="inner">
+<div itemscope itemtype="http://schema.org/Blog">
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2017-01-20T13:56:16+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/docker/'>docker</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2017/01/20/logspout-redis-elk/" itemprop="url">Logspout-redis-elk</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>接上篇<a href="http://www.pffair.com/blog/2017/01/15/logspout-elk/">logspout-elk</a>.我们在上篇中完成了使用logspout收集docker日志并发送到logstash中。本文在之前的基础上在logspout到logstash之间添加了redis消息队列。</p>
+
+
+		
+		<a href="/blog/2017/01/20/logspout-redis-elk/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2017-01-15T19:00:35+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/docker/'>docker</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2017/01/15/logspout-elk/" itemprop="url">Logspout-elk</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>接上篇<a href="http://www.pffair.com/blog/2017/01/12/elk-docker/">elk-docker</a>，在docker swarm环境部署好了elk，如何在swarm环境进行日志收集呢？本文使用logspout进行swarm中每个节点的日志收集并发送给logstash，logstash将日志存入elasticsearch中，kinana从elasticsearch读取日志信息进行展示。</p>
+
+
+		
+		<a href="/blog/2017/01/15/logspout-elk/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2017-01-12T23:18:34+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/docker/'>docker</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2017/01/12/elk-docker/" itemprop="url">Elk-docker</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>本文接上篇<a href="http://www.pffair.com/blog/2017/01/11/ecs-docker-swarm/">ecs-docker-swarm</a>,在实现ESC docker swarm并添加es-swarm-2 label:elk=yes基础上部署elk(elasticsearch、logstash、kibana),其中elasticsearch部署到label中elk=yes的节点也就是es-swarm-2</p>
+
+
+		
+		<a href="/blog/2017/01/12/elk-docker/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2017-01-11T21:25:06+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/docker/'>docker</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2017/01/11/ecs-docker-swarm/" itemprop="url">Ecs-docker-swarm</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>接前篇<a href="http://www.pffair.com/blog/2017/01/11/docker-on-ecs/">安装docker到ECS</a>，接下来实现在本机使用docker machine实现swarm创建和节点管理。</p>
+
+<ul>
+<li>本机docker machine</li>
+<li>es-swarm-1(manager)</li>
+<li>es-swarm-2(worker)</li>
+</ul>
+
+
+
+		
+		<a href="/blog/2017/01/11/ecs-docker-swarm/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2017-01-11T16:48:04+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/docker/'>docker</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2017/01/11/docker-on-ecs/" itemprop="url">安装docker到ECS</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>本文不采用阿里云管理平台的配置，安装docker到ECS</p>
+
+
+		
+		<a href="/blog/2017/01/11/docker-on-ecs/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2017-01-04T12:59:55+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/docker/'>docker</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2017/01/04/docker-constraint/" itemprop="url">Docker-constraint</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>在docker swarm mode中create service到指定label的node下。</p>
+
+<p>以下操作前提是已经创建好了swarm mode的两个node: swarm-1（manager）、swarm-2(worker)。</p>
+
+
+		
+		<a href="/blog/2017/01/04/docker-constraint/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-07-16T19:41:31+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/tomcat/'>tomcat</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2016/07/16/tomcat-apr/" itemprop="url">Tomcat Https</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>https也就是经过ssl加密的http，配置tomcat支持https协议其实就是tomcat SSL/TSL相关信息的配置实现。以下配置均在ubuntu环境下&hellip;</p>
+
+
+		
+		<a href="/blog/2016/07/16/tomcat-apr/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-06-29T15:21:47+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/turn/'>turn</a>, <a class='category' href='/blog/categories/webrtc/'>webrtc</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2016/06/29/webrtcshi-jian/" itemprop="url">Webrtc实践</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>最近了解了下WebRTC，并使用SimpleWebRTC做了个简单demo，记录下实践过程以及遇到的一些问题。</p>
+
+
+		
+		<a href="/blog/2016/06/29/webrtcshi-jian/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-05-17T21:33:55+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/react/'>react</a>, <a class='category' href='/blog/categories/redux/'>redux</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2016/05/17/react-redux-learn/" itemprop="url">React+Redux Learn</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>之前一直想尝试react苦于没有时间。最近有前端项目用到所以简单学习总结一下。
+先看一个react的<a href="https://github.com/pangff/react-redux-learn/blob/master/demo01/index.html">hello world</a></p>
+
+
+		
+		<a href="/blog/2016/05/17/react-redux-learn/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+
+    <article class="post" itemprop="blogPost" itemscope itemtype="http://schema.org/BlogPosting">
+	<div class="meta">
+		<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-04-01T15:56:05+08:00" data-updated="true" itemprop="datePublished"></time></div>
+		<div class="tags">
+
+
+	<a class='category' href='/blog/categories/android/'>android</a>, <a class='category' href='/blog/categories/filechooser/'>filechooser</a>, <a class='category' href='/blog/categories/webview/'>webview</a>
+
+
+</div>
+		
+	</div>
+	<h1 class="title" itemprop="name"><a href="/blog/2016/04/01/webview-upload/" itemprop="url">WebView图片上传的各种坑</a></h1>
+	<div class="entry-content" itemprop="articleBody">
+		<p>最近项目用到了应用内webview图片上传，虽然最终实现了，但是遇到了各种坑，抽时间总结一下。</p>
+
+
+		
+		<a href="/blog/2016/04/01/webview-upload/" class="more-link">Read on &rarr;</a>
+	</div>
+
+</article>
+
+</div>
+<nav id="pagenavi">
+    
+    
+        <a href="2" class="next">Next</a>
+    
+    <div class="center"><a href="/blog/archives">Blog Archives</a></div>
+</nav></div>
+			</div>
+			<footer id="footer" class="inner">Copyright &copy; 2021
+
+    pangff
+
+<a href="https://beian.miit.gov.cn/">京ICP备14050056号-1</a>
+
+Design credit: <a href="http://shashankmehta.in/archive/2012/greyshade.html">Shashank Mehta</a>
+<script type="text/javascript">
+var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_1000501877'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s4.cnzz.com/z_stat.php%3Fid%3D1000501877%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));
+</script></footer>
+			<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-52176210-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+		</div>
+	</div>
+</body>
+</html>

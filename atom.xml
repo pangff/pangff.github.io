@@ -1,0 +1,3643 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Pangff's Blog]]></title>
+  <link href="http://www.pffair.com/atom.xml" rel="self"/>
+  <link href="http://www.pffair.com/"/>
+  <updated>2021-04-12T00:18:13+08:00</updated>
+  <id>http://www.pffair.com/</id>
+  <author>
+    <name><![CDATA[pangff]]></name>
+    <email><![CDATA[540688649@qq.com]]></email>
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[logspout-redis-elk]]></title>
+    <link href="http://www.pffair.com/blog/2017/01/20/logspout-redis-elk/"/>
+    <updated>2017-01-20T13:56:16+08:00</updated>
+    <id>http://www.pffair.com/blog/2017/01/20/logspout-redis-elk</id>
+    <content type="html"><![CDATA[<p>接上篇<a href="http://www.pffair.com/blog/2017/01/15/logspout-elk/">logspout-elk</a>.我们在上篇中完成了使用logspout收集docker日志并发送到logstash中。本文在之前的基础上在logspout到logstash之间添加了redis消息队列。</p>
+
+<!--more-->
+
+
+<h3>为什么要添加消息队列呢？</h3>
+
+<p>参考ELK官方的文档<a href="https://www.elastic.co/guide/en/logstash/current/deploying-and-scaling.html#deploying-message-queueing">Managing Throughput Spikes with Message Queueing</a>。当logstash索引消费速率低于传入速率时Logstash将会对传入事件进行限制，这样会使传入事件在数据源头堆积。添加消息队列不仅可以起到防止back pressure作用同时还可以放置数据丢失。当从消息队列消费数据失败我们还可以重新获取。在我们之前的架构中如果事件消费出现异常(比如我们的Elasticsearch出现问题)不能及时消费logstash获取到的日志时那么logstash做限入控制，数据将会在我们的container堆积，而此时如果我们container出现问题而被remove并且恰恰没有mount宿主机磁盘进行log存储的话那么我们之前的日志将会全部丢失，由此可见添加消息队列的重要性。至于为什么选用redis，只是简单了解到它的速度、易用性、和低资源需求比较好，最主要的原因还是相对 Kafka、RabbitMQ对它更熟悉。如果感兴趣可以对（redis、kafka、RabbitMQ）做一个简单对比和测试</p>
+
+<h3>添加redis message broker</h3>
+
+<p>由于采用redis message broker我们需要修改logstash的配置文件，所以整体的service创建我们重新走一遍，也算对之前内容的巩固</p>
+
+<p>开始之前将全部的service、network删除</p>
+
+<p><strong>删除service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service rm logstash \
+</span><span class='line'>elasticsearch proxy \
+</span><span class='line'>swarm-listener kibana
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>删除network</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker network rm elk proxy
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建elk overlay network</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker network create --driver overlay elk
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建elasticsearch service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name elasticsearch \
+</span><span class='line'>    --mode global \
+</span><span class='line'>    --network elk \
+</span><span class='line'>    -p 9200:9200 \
+</span><span class='line'>    -e ES_JAVA_OPTS="-Dmapper.allow_dots_in_name=true" \
+</span><span class='line'>    --constraint "node.labels.elk == yes" \
+</span><span class='line'>    --reserve-memory 500m \
+</span><span class='line'>    elasticsearch:2.4
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>需要注意的是</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>-e ES_JAVA_OPTS="-Dmapper.allow_dots_in_name=true"</span></code></pre></td></tr></table></div></figure>
+
+
+<p>这个环境变量，使用它的目的是为了让Elasticsearch允许日志属性名称中有".&ldquo;，比如类似com.docker.node.id这样的属性名字，在Elasticsearch 2.X版本中是不允许的收集的日志中如果存在的话Elasticsearch会抛异常</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>MapperParsingException[Field name [com.docker.node.id] cannot contain '.'] </span></code></pre></td></tr></table></div></figure>
+
+
+<p><em>加个小备注：Elasticsearch的日志可以通过。</em> <strong>docker ps -a</strong>
+<em>找到Elasticsearch的container id然后</em>
+<strong>docker logs containerid</strong> <em>查看</em></p>
+
+<p>具体关于点的问题可以参考<a href="https://www.elastic.co/guide/en/elasticsearch/reference/2.4/dots-in-names.html">dots-in-names</a>
+当然也可以直接安装5.X的<a href="https://hub.docker.com/_/elasticsearch/">Elasticsearch</a>，5.0默认是支持的。我开始尝试安装5.0版本但是create service 会提示netwrok not found，不能创建成功，之后没有再尝试解决，感兴趣的话可以试试并且将elasticsearch 2.X版本和5.X做一个比较，5.x相对2.x的变化</p>
+
+<p><strong>创建redis service,加入到elk network</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name redis \
+</span><span class='line'>--network elk \
+</span><span class='line'>-p 6379:6379  redis redis-server --requirepass redis
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>通过redis-server &ndash;requirepass 设置密码为redis。建议这里要设置密码，再实际操作时发现外部全局扫描redis时候并且可能运行CONFIG SET REQUIREPASS，会锁定redis运行实例，出现授权提示<a href="http://stackoverflow.com/questions/34115213/redis-raise-error-noauth-authentication-required-but-there-is-no-password-setti">参考</a></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>redis (error) NOAUTH Authentication required.</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>修改logstash配置文件</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>input {
+</span><span class='line'>  redis {
+</span><span class='line'>    host =&gt; "redis"
+</span><span class='line'>    data_type =&gt; "list"
+</span><span class='line'>    key =&gt; "logspout"
+</span><span class='line'>    codec =&gt; "json"
+</span><span class='line'>    password =&gt; "redis"
+</span><span class='line'>  }
+</span><span class='line'>}
+</span><span class='line'>filter {
+</span><span class='line'>
+</span><span class='line'>}
+</span><span class='line'>output {
+</span><span class='line'>  elasticsearch {
+</span><span class='line'>    hosts =&gt; ["elasticsearch:9200"]
+</span><span class='line'>  }
+</span><span class='line'>}
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>这里需要注意的是key，它对应的是我们日志收集后存储到redis中的key，关于key的指定方式会在后面描述。filter部分我没有添加信息，真实环境根据需要在这里添加一些日志过滤处理，比如格式化、删除无用日志等等，感兴趣可以去看下。password为redis密码</p>
+
+<p><strong>上传配置文件到节点主机</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>mkdir -p docker/logstash
+</span><span class='line'>cp conf/logstash.conf docker/logstash/logstash.conf
+</span><span class='line'>scp -r docker root@xxx.xxx.xxx.xxx:/
+</span><span class='line'>scp -r docker root@xxx.xxx.xxx.xxx:/
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建logstash service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name logstash \
+</span><span class='line'>    --mount "type=bind,source=/docker/logstash,target=/conf" \
+</span><span class='line'>    --mode global \
+</span><span class='line'>    --network elk \
+</span><span class='line'>    --constraint "node.labels.elk == yes" \
+</span><span class='line'>    -e LOGSPOUT=ignore \
+</span><span class='line'>    --reserve-memory 100m \
+</span><span class='line'>    mywebgrocer/logstash logstash -f /conf/logstash.conf
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建proxy overlay network</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker network create --driver overlay proxy
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建swarm-listener service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name swarm-listener \
+</span><span class='line'>    --network proxy \
+</span><span class='line'>    --mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock" \
+</span><span class='line'>    -e DF_NOTIF_CREATE_SERVICE_URL=http://proxy:8080/v1/docker-flow-proxy/reconfigure \
+</span><span class='line'>    -e DF_NOTIF_REMOVE_SERVICE_URL=http://proxy:8080/v1/docker-flow-proxy/remove \
+</span><span class='line'>    --constraint 'node.role==manager' \
+</span><span class='line'>    vfarcic/docker-flow-swarm-listener
+</span><span class='line'>    </span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建proxy service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name proxy \
+</span><span class='line'>    -p 80:80 \
+</span><span class='line'>    -p 443:443 \
+</span><span class='line'>    --network proxy \
+</span><span class='line'>    -e MODE=swarm \
+</span><span class='line'>    -e LISTENER_ADDRESS=swarm-listener \
+</span><span class='line'>    vfarcic/docker-flow-proxy
+</span><span class='line'>    </span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>创建kibana service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name kibana \
+</span><span class='line'>    --network elk \
+</span><span class='line'>    --network proxy \
+</span><span class='line'>    -e ELASTICSEARCH_URL=http://elasticsearch:9200 \
+</span><span class='line'>    --reserve-memory 50m \
+</span><span class='line'>    --label com.df.notify=true \
+</span><span class='line'>    --label com.df.distribute=true \
+</span><span class='line'>    --label com.df.servicePath=/app/kibana,/bundles,/elasticsearch \
+</span><span class='line'>    --label com.df.port=5601 \
+</span><span class='line'>    kibana:4.6</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>比较重要的一步创建<a href="https://github.com/rtoma/logspout-redis-logstash">logspout-redis-logstash service</a></strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name logspout \
+</span><span class='line'>    --network elk \
+</span><span class='line'>    --mode global \
+</span><span class='line'>    --mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock" \
+</span><span class='line'>    rtoma/logspout-redis-logstash redis://redis?password=redis
+</span><span class='line'>    </span></code></pre></td></tr></table></div></figure>
+
+
+<p>其实logspout-redis-logstash是可以指定redis的key的如redis://redis?key=&ldquo;logspout"。因为不指定默认是logspout，我没有写默认就是logspout。所以这部分对应的就是前面logstash配置文件redis中的key值。password为redis密码</p>
+
+<p><strong>我们自己的测试service</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create -p 3000:3000 --name hello-service pangff/hello-service:latest
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>访问测试服务</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>open http://$(docker-machine ip es-swarm-1):3000/hello/123
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>访问Kibana</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>open http://$(docker-machine ip es-swarm-1)/app/kibana
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>配置index，然后Discover，搜索hello结果如图（访问一次再看，会发现结果变多一条）</p>
+
+<p><img src="http://www.pffair.com/images/65.png" alt="" /></p>
+
+<p><em>如果访问Kibana后在创建logstash-**默认索引时候下面是灰色没有mapper时，说明elasticsearch没有收到日志。如果在创建logstash-默认索引时候可以创建但是Time-field name没有内容时候，说明日志格式问题或者Elasticsearch出现异常</em></p>
+
+<h3>备注</h3>
+
+<p><strong>查看redis container中logspout内容</strong></p>
+
+<p>查看redis在哪个节点</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service ps redis
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>进入redis对应主机</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker-machine ssh es-swarm-1
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>查看redis container id</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker ps -a
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>找到redis容器id进入容器（2361aa523cd1是redis容器id）</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker exec -it 2361aa523cd1 /bin/bash
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>访问redis</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>redis-cli</span></code></pre></td></tr></table></div></figure>
+
+
+<p>查看key为logsput类型为list的数据前10条</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>LRANGE logspout 0 10
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>后续需要处理</h3>
+
+<ul>
+<li>是否有循环日志采集问题，比如统计到elasticsearch日志后，日志进入elasticsearch本身也会出现日志，这样造成循环</li>
+<li>在正式环境下该日志处理架构的节点编排、network处理</li>
+<li>elasticsearch的数据备份，磁盘扩容</li>
+<li>该日志处理架构下，个个节点性能指标</li>
+<li>该日志能否按需求收集相关日志,需要后续根据业务测试</li>
+<li><a href="https://www.elastic.co/blog/kibana-4-video-tutorials-part-1">kibana</a>的深入学习</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[logspout-elk]]></title>
+    <link href="http://www.pffair.com/blog/2017/01/15/logspout-elk/"/>
+    <updated>2017-01-15T19:00:35+08:00</updated>
+    <id>http://www.pffair.com/blog/2017/01/15/logspout-elk</id>
+    <content type="html"><![CDATA[<p>接上篇<a href="http://www.pffair.com/blog/2017/01/12/elk-docker/">elk-docker</a>，在docker swarm环境部署好了elk，如何在swarm环境进行日志收集呢？本文使用logspout进行swarm中每个节点的日志收集并发送给logstash，logstash将日志存入elasticsearch中，kinana从elasticsearch读取日志信息进行展示。</p>
+
+<!--more-->
+
+
+<h3>创建logspout service</h3>
+
+<p>使用以下命令进行logspout service创建</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name logspout \
+</span><span class='line'>    --network elk \
+</span><span class='line'>    --mode global \
+</span><span class='line'>    --mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock" \
+</span><span class='line'>    -e SYSLOG_FORMAT=rfc3164 \
+</span><span class='line'>    gliderlabs/logspout syslog://logstash:51415
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>创建global的logspout servive因为我们要在每一container上进行日志监控。将logspout service加入elk network，以便于和之前的logstash service进行通信。在服务启动的时候执行syslog://logstash:51415告诉logspout我们要使用syslog协议发送日志到在51415端口运行的logstash</p>
+
+<p>查看logspout service状态</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service ps logspout</span></code></pre></td></tr></table></div></figure>
+
+
+<p><img src="http://www.pffair.com/images/64.png" alt="" /></p>
+
+<p>等到logspout启动完成。我们用一个小例子看看logspout是否真的把日志发送给了logspout。<a href="https://github.com/MarshalW/hello-service">例子代码</a></p>
+
+<p>创建基于restify的 <a href="(https://github.com/MarshalW/hello-service">hello-service</a>)</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create -p 3000:3000 --name hello-service marshalw/hello-service:0.1.0
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>查看hello-service状态</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service ps hello-service
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>等待hello-service完全启动后，运行查下</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>open http://$(docker-machine ip es-swarm-1):3000/hello/name
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>通过以下几个命令查看logstash对应container的日志</p>
+
+<p>用以下查看当前节点全部container信息，并找到logstash对应 container id</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker ps -a
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>用以下命令查看logstash日志信息（命令中65b7825aef55是上面找到的logstash container id）</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker logs 65b7825aef55
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>可以发现以下日志条目。（因为我们的logstash是global的，每次日志发送不一定发送到了当前节点的logstash上来，要么通过多访问几次hello-service的方式，要么发现本节点没有就去另外的节点按相同方法找）</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>{
+</span><span class='line'>           "message" =&gt; "restify listening at http://[::]:3000\n",
+</span><span class='line'>          "@version" =&gt; "1",
+</span><span class='line'>        "@timestamp" =&gt; "2017-01-15T12:09:18.000Z",
+</span><span class='line'>              "host" =&gt; "10.0.0.12",
+</span><span class='line'>          "priority" =&gt; 14,
+</span><span class='line'>     "timestamp8601" =&gt; "2017-01-15T12:09:18Z",
+</span><span class='line'>         "logsource" =&gt; "65b7825aef55",
+</span><span class='line'>           "program" =&gt; "hello-service.1.9zdbccrwv7q7yj8qpeg82kbr6",
+</span><span class='line'>               "pid" =&gt; "12204",
+</span><span class='line'>          "severity" =&gt; 6,
+</span><span class='line'>          "facility" =&gt; 1,
+</span><span class='line'>         "timestamp" =&gt; "2017-01-15T12:09:18Z",
+</span><span class='line'>    "facility_label" =&gt; "user-level",
+</span><span class='line'>    "severity_label" =&gt; "Informational"
+</span><span class='line'>}
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>说明我们hello-service的日志的确是发送到了logstash中。</p>
+
+<p>运行</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>open http://$(docker-machine ip es-swarm-1)/app/kibana</span></code></pre></td></tr></table></div></figure>
+
+
+<p>启动kibana，配置一个index可以在kibanna中看到我们hello-service的访问日志</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[elk-docker]]></title>
+    <link href="http://www.pffair.com/blog/2017/01/12/elk-docker/"/>
+    <updated>2017-01-12T23:18:34+08:00</updated>
+    <id>http://www.pffair.com/blog/2017/01/12/elk-docker</id>
+    <content type="html"><![CDATA[<p>本文接上篇<a href="http://www.pffair.com/blog/2017/01/11/ecs-docker-swarm/">ecs-docker-swarm</a>,在实现ESC docker swarm并添加es-swarm-2 label:elk=yes基础上部署elk(elasticsearch、logstash、kibana),其中elasticsearch部署到label中elk=yes的节点也就是es-swarm-2</p>
+
+<!--more-->
+
+
+<p>上文中的环境:</p>
+
+<ul>
+<li>es-swarm-1(manager)</li>
+<li>es-swarm-2(worker,label:elk=yes)</li>
+</ul>
+
+
+<h3>创建elk overlay</h3>
+
+<p> 创建以elk命名的overlay network，之后elk的通信将通过elk overlay</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>eval $(docker-machine env swarm-1)
+</span><span class='line'>
+</span><span class='line'>docker network create --driver overlay elk
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>创建elasticsearch service</h3>
+
+<p> 创建global的elasticsearch service，并且通过constraint(参考<a href="http://www.pffair.com/blog/2017/01/04/docker-constraint/">docker-constraint</a>)限制elasticsearch只能创建部署到label中elk＝yes的节点，也就是es-swarm-2节点</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name elasticsearch \
+</span><span class='line'>    --mode global \
+</span><span class='line'>    --network elk \
+</span><span class='line'>    -p 9200:9200 \
+</span><span class='line'>    --constraint "node.labels.elk == yes" \
+</span><span class='line'>    --reserve-memory 500m \
+</span><span class='line'>    elasticsearch:2.4
+</span><span class='line'>    </span></code></pre></td></tr></table></div></figure>
+
+
+<p>因为后续的logstash servcie要依赖elasticsearch service所以要确保elasticsearch service完全启动后再去创建logstash。
+如果是单独命令运行，只要用</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service ps elasticsearch
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>去检查下elasticsearch的CURRENT STATE是不是Running,不是就等会儿。通过这个命令我们还可以看到elasticsearch在个个节点部署状态,下图可以看到elasticsearch已经运行，而且只有在es-swarm-2上是Running。</p>
+
+<p><img src="http://www.pffair.com/images/63.png" alt="" /></p>
+
+<p>当然如果只是查看是否启动成功也可以</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>open http://$(docker-machine ip es-swarm-1):9200</span></code></pre></td></tr></table></div></figure>
+
+
+<p>直接打开浏览器看是否可以访问</p>
+
+<p>如果elk整个启动是在一个脚本中运行，那就需要做一个等待处理。有很多方法，我这里采用的是过滤获取docker service ps命令日志信息来判断（方法自己感觉不是很好，如果有好办法欢迎指正）</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>
+</span><span class='line'>while true; do
+</span><span class='line'>    REPLICAS=$(docker service ps elasticsearch | grep es-swarm-2 | awk '{print $7}')
+</span><span class='line'>    echo "REPLICAS:"$REPLICAS
+</span><span class='line'>    A=$(docker service ps elasticsearch | grep es-swarm-2 | awk '{print $0}')
+</span><span class='line'>    echo $A
+</span><span class='line'>    if [[ $REPLICAS == "Running" ]]; then
+</span><span class='line'>        sleep 5
+</span><span class='line'>        echo "elasticsearch Running..."
+</span><span class='line'>        break
+</span><span class='line'>    else
+</span><span class='line'>        echo "Waiting for the elasticsearch service..."
+</span><span class='line'>        sleep 5
+</span><span class='line'>    fi
+</span><span class='line'>done</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>创建logstash service</h3>
+
+<p>添加logstash的配置文件，因为默认logstash的配置是</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>input {
+</span><span class='line'>    stdin {}
+</span><span class='line'>    syslog {}
+</span><span class='line'>}</span></code></pre></td></tr></table></div></figure>
+
+
+<p>我们要将logstash收集的日志输出到elasticsearch所以要创建配置文件，并再通过 mount让logstash读取修改后的配置</p>
+
+<p>在本地创建config/logstash.conf,并修改为以下内容</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>input {
+</span><span class='line'>  syslog { port =&gt; 51415 }
+</span><span class='line'>}
+</span><span class='line'>
+</span><span class='line'>output {
+</span><span class='line'>  elasticsearch {
+</span><span class='line'>    hosts =&gt; ["elasticsearch:9200"]
+</span><span class='line'>  }
+</span><span class='line'>  # Remove in production
+</span><span class='line'>  stdout {
+</span><span class='line'>    codec =&gt; rubydebug
+</span><span class='line'>  }
+</span><span class='line'>}
+</span><span class='line'>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>为了后面目录整齐，便于管理，我们创建统一docker目录。对于logstash的配置文件我们放到logstash目录中。并将docker目录传到两台ECS，也就是docker node上</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>mkdir -p docker/logstash
+</span><span class='line'>cp conf/logstash.conf docker/logstash/logstash.conf
+</span><span class='line'>scp -r docker root@xxx.xxx.xxx.xxx:/
+</span><span class='line'>scp -r docker root@xxx.xxx.xxx.xxx:/</span></code></pre></td></tr></table></div></figure>
+
+
+<p>创建logstash service。logstash service是global的，目前并没有通过label去限制logstash（正式环境视情况定），加入elk network，我们将上传到ECS的目录bind到了logstash的conf下，指定logstash的conf配置在/conf/logstash.conf。配置环境变量LOGSPOUT=ignore为后续logspout做准备</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name logstash \
+</span><span class='line'>    --mount "type=bind,source=/docker/logstash,target=/conf" \
+</span><span class='line'>    --mode global \
+</span><span class='line'>    --network elk \
+</span><span class='line'>    -e LOGSPOUT=ignore \
+</span><span class='line'>    --reserve-memory 100m \
+</span><span class='line'>    logstash:2.4 logstash -f /conf/logstash.conf</span></code></pre></td></tr></table></div></figure>
+
+
+<p>同样如果在一个脚本中，一样等待启动完成</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>while true; do
+</span><span class='line'>    REPLICAS=$(docker service ps logstash | grep es-swarm-2 | awk '{print $7}')
+</span><span class='line'>    echo "REPLICAS:"$REPLICAS
+</span><span class='line'>     A=$(docker service ps logstash | grep es-swarm-2 | awk '{print $0}')
+</span><span class='line'>    echo $A
+</span><span class='line'>    if [[ $REPLICAS == "Running" ]]; then
+</span><span class='line'>        sleep 5
+</span><span class='line'>        echo "logstash Running..."
+</span><span class='line'>        break
+</span><span class='line'>    else
+</span><span class='line'>        echo "Waiting for the logstash service..."
+</span><span class='line'>        sleep 5
+</span><span class='line'>    fi
+</span><span class='line'>done
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>创建代理proxy overlay network。proxy用于代理与个个service间通信</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker network create --driver overlay proxy
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>通过swarm-listener、docker-flow-proxy实现<a href="http://proxy.dockerflow.com/swarm-mode-auto/">swarm-mode-auto</a>。swarm-listener监控swarm service的创建销毁事件，当service创建销毁时自动发送请求给docker-flow-proxy进行重新配置(<a href="http://proxy.dockerflow.com/usage/#reconfigure">reconfigure</a>)。</p>
+
+<p>创建swarm-listener service。-e环境变量意义部分参考文章<a href="http://proxy.dockerflow.com/swarm-mode-auto/">swarm-mode-auto</a></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name swarm-listener \
+</span><span class='line'>    --network proxy \
+</span><span class='line'>    --mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock" \
+</span><span class='line'>    -e DF_NOTIF_CREATE_SERVICE_URL=http://proxy:8080/v1/docker-flow-proxy/reconfigure \
+</span><span class='line'>    -e DF_NOTIF_REMOVE_SERVICE_URL=http://proxy:8080/v1/docker-flow-proxy/remove \
+</span><span class='line'>    --constraint 'node.role==manager' \
+</span><span class='line'>    vfarcic/docker-flow-swarm-listener
+</span><span class='line'>    </span></code></pre></td></tr></table></div></figure>
+
+
+<p>创建proxy service。80 http请求，443 https请求。外部请求通过proxy代理到目标service</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create --name proxy \
+</span><span class='line'>    -p 80:80 \
+</span><span class='line'>    -p 443:443 \
+</span><span class='line'>    --network proxy \
+</span><span class='line'>    -e MODE=swarm \
+</span><span class='line'>    -e LISTENER_ADDRESS=swarm-listener \
+</span><span class='line'>    vfarcic/docker-flow-proxy
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>一个shell脚本运行，确保服务启动。通过service ls的 replicas=1/1 确保swarm-listener 和 proxy启动完成</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>while true; do
+</span><span class='line'>    REPLICAS=$(docker service ls | grep swarm-listener | awk '{print $3}')
+</span><span class='line'>    REPLICAS_NEW=$(docker service ls | grep swarm-listener | awk '{print $4}')
+</span><span class='line'>    if [[ $REPLICAS == "1/1" || $REPLICAS_NEW == "1/1" ]]; then
+</span><span class='line'>        break
+</span><span class='line'>    else
+</span><span class='line'>        echo "Waiting for the swarm-listener service..."
+</span><span class='line'>        sleep 5
+</span><span class='line'>    fi
+</span><span class='line'>done
+</span><span class='line'>
+</span><span class='line'>while true; do
+</span><span class='line'>    REPLICAS=$(docker service ls | grep proxy | awk '{print $3}')
+</span><span class='line'>    REPLICAS_NEW=$(docker service ls | grep proxy | awk '{print $4}')
+</span><span class='line'>    if [[ $REPLICAS == "1/1" || $REPLICAS_NEW == "1/1" ]]; then
+</span><span class='line'>        break
+</span><span class='line'>    else
+</span><span class='line'>        echo "Waiting for the proxy service..."
+</span><span class='line'>        sleep 5
+</span><span class='line'>    fi
+</span><span class='line'>done
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>创建kibana service 并等待完成。kibana中的label作用参考<a href="http://proxy.dockerflow.com/swarm-mode-auto/">swarm-mode-auto</a></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>
+</span><span class='line'>docker service create --name kibana \
+</span><span class='line'>    --network elk \
+</span><span class='line'>    --network proxy \
+</span><span class='line'>    -e ELASTICSEARCH_URL=http://elasticsearch:9200 \
+</span><span class='line'>    --reserve-memory 50m \
+</span><span class='line'>    --label com.df.notify=true \
+</span><span class='line'>    --label com.df.distribute=true \
+</span><span class='line'>    --label com.df.servicePath=/app/kibana,/bundles,/elasticsearch \
+</span><span class='line'>    --label com.df.port=5601 \
+</span><span class='line'>    kibana:4.6</span></code></pre></td></tr></table></div></figure>
+
+
+<p>一个脚本运行时，确保服务启动</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>
+</span><span class='line'>while true; do
+</span><span class='line'>    REPLICAS=$(docker service ls | grep proxy | awk '{print $3}')
+</span><span class='line'>    REPLICAS_NEW=$(docker service ls | grep proxy | awk '{print $4}')
+</span><span class='line'>    if [[ $REPLICAS == "1/1" || $REPLICAS_NEW == "1/1" ]]; then
+</span><span class='line'>        break
+</span><span class='line'>    else
+</span><span class='line'>        echo "Waiting for the proxy service..."
+</span><span class='line'>        sleep 5
+</span><span class='line'>    fi
+</span><span class='line'>done
+</span><span class='line'>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>访问kibana</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>open http://$(docker-machine ip es-swarm-1)/app/kibana
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>至此，在swarm mode 中部署elk完成。
+完整脚本参考<a href="https://github.com/pangff/docker-swarm-sh/blob/master/scripts/dm-swarm-services-elk.sh">dm-swarm-services-elk</a></p>
+
+<p><a href="">后续将通过logspout进行日志采集并发送到logstash再到elasticsearch，并通过kibana进行查看的例子 >>></a></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[ecs-docker-swarm]]></title>
+    <link href="http://www.pffair.com/blog/2017/01/11/ecs-docker-swarm/"/>
+    <updated>2017-01-11T21:25:06+08:00</updated>
+    <id>http://www.pffair.com/blog/2017/01/11/ecs-docker-swarm</id>
+    <content type="html"><![CDATA[<p>接前篇<a href="http://www.pffair.com/blog/2017/01/11/docker-on-ecs/">安装docker到ECS</a>，接下来实现在本机使用docker machine实现swarm创建和节点管理。</p>
+
+<ul>
+<li>本机docker machine</li>
+<li>es-swarm-1(manager)</li>
+<li>es-swarm-2(worker)</li>
+</ul>
+
+
+<!--more-->
+
+
+<h3>准备工作</h3>
+
+<ul>
+<li>为已安装docker的ECS es-swarm-1实例开启端口
+
+<ul>
+<li>TCP端口2377用于集群管理通信</li>
+<li>TCP和UDP端口7946用于节点之间的通信</li>
+<li>TCP和UDP端口4789用于overlay网络交互</li>
+</ul>
+</li>
+<li>对已安装docker的ECS es-swarm-1实例进行自定义镜像制作，阿里的管理控制台一键完成</li>
+<li>再购买一台ECS实例，采用刚刚制作的自定义镜像，命名为es-swarm-2</li>
+<li>在本机安装docker machine,我的系统是Mac OS，直接下载dmg安装</li>
+<li>将本机公钥配置到es-swarm-1、es-swarm-2的authorized_key中，确保本机可以无密登录es-swarm-1、es-swarm-2。可以通过ssh-copy-id方便的配置</li>
+</ul>
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'> ssh-copy-id root@xxx.xxx.xxx.xxx</span></code></pre></td></tr></table></div></figure>
+
+
+<p> 把xxx.xxx.xxx.xxx分别替换为es-swarm-1、es-swarm-2的ip即可</p>
+
+<h3>关联远程node创建machine实例</h3>
+
+<p>通过docker-machine的<a href="https://docs.docker.com/machine/drivers/generic/">generic</a>实现分别关联远程es-swarm-1、es-swarm-2创建machine实例</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker-machine -D create \
+</span><span class='line'>--driver generic \
+</span><span class='line'>--generic-ip-address xxx.xxx.xxx.xxx \
+</span><span class='line'>--generic-ssh-user root es-swarm-1
+</span><span class='line'>
+</span><span class='line'>docker-machine -D create \
+</span><span class='line'>--driver generic \
+</span><span class='line'>--generic-ip-address xxx.xxx.xxx.xxx \
+</span><span class='line'>--generic-ssh-user root es-swarm-2
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>将xxx.xxx.xxx.xxx分别替换为es-swarm-1、es-swarm-2的ip。确认下是否成功</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'> docker-machine ls</span></code></pre></td></tr></table></div></figure>
+
+
+<p><img src="http://www.pffair.com/images/62.png" alt="" /></p>
+
+<h3>swarm初始化，es-swarm-1做manager</h3>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>eval $(docker-machine env es-swarm-1)
+</span><span class='line'>
+</span><span class='line'>docker swarm init \
+</span><span class='line'>  --advertise-addr $(docker-machine ip es-swarm-1)
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>将es-swarm-2加入</h3>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>TOKEN=$(docker swarm join-token -q manager)
+</span><span class='line'>
+</span><span class='line'>eval $(docker-machine env es-swarm-2)
+</span><span class='line'>
+</span><span class='line'>docker swarm join \
+</span><span class='line'>        --token $TOKEN \
+</span><span class='line'>        --advertise-addr $(docker-machine ip es-swarm-2) \
+</span><span class='line'>        $(docker-machine ip es-swarm-1):2377
+</span><span class='line'>        </span></code></pre></td></tr></table></div></figure>
+
+
+<p>至此创建完成，查看下节点状态</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker node ls
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><img src="http://www.pffair.com/images/61.png" alt="" /></p>
+
+<h3>为es-swarm-2添加elk label为后续ELK部署做准备</h3>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker node update \
+</span><span class='line'>        --label-add elk=yes \
+</span><span class='line'>        es-swarm-2</span></code></pre></td></tr></table></div></figure>
+
+
+<p>整个流程我们可以放到一个shell脚本中，一次完成</p>
+
+<p>完整脚本参考<a href="https://github.com/pangff/docker-swarm-sh/blob/master/scripts/dm-swarm.sh">dm-swarm.sh</a></p>
+
+<p><a href="http://www.pffair.com/blog/2017/01/12/elk-docker/">后续，部署ELK，并指定ELK中 elasticsearch部署到指定的es-swarm-2节点 >>></a></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[安装docker到ECS]]></title>
+    <link href="http://www.pffair.com/blog/2017/01/11/docker-on-ecs/"/>
+    <updated>2017-01-11T16:48:04+08:00</updated>
+    <id>http://www.pffair.com/blog/2017/01/11/docker-on-ecs</id>
+    <content type="html"><![CDATA[<p>本文不采用阿里云管理平台的配置，安装docker到ECS</p>
+
+<!--more-->
+
+
+<h3>准备工作</h3>
+
+<p>购买一台阿里ECS，只是为了测试可以使用按量付费并最低配置,系统ubuntu 16.04。注意版本很重要，docker有限支持ubuntu的版本，命名为es-swarm-1</p>
+
+<h3>安装docker</h3>
+
+<p>安装参考<a href="https://docs.docker.com/engine/installation/linux/ubuntulinux/">Install Docker on Ubuntu</a> (当然也可以通过docker-machine去安装)，本文采用<a href="https://docs.docker.com/engine/installation/linux/ubuntulinux/">Install Docker on Ubuntu</a>方式。</p>
+
+<p>购买启动后，ssh到购买的ECS上</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>ssh root@xxx.xxx.xxx.xxx</span></code></pre></td></tr></table></div></figure>
+
+
+<p>更新APT ，确保APT使用https方法，并且已安装CA证书</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ sudo apt-get update
+</span><span class='line'>$ sudo apt-get install apt-transport-https ca-certificates
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>添加新的GPG密钥</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ sudo apt-key adv \
+</span><span class='line'>               --keyserver hkp://ha.pool.sks-keyservers.net:80 \
+</span><span class='line'>               --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>配置docker资源库。“deb <a href="https://apt.dockerproject.org/repo">https://apt.dockerproject.org/repo</a> ubuntu-xenial main” 部分根据根据不同Ubuntu系统版本使用不同配置</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" | sudo tee /etc/apt/sources.list.d/docker.list
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>更新APT</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ sudo apt-get update 
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>在这步会出错，因为阿里将<a href="https://apt.dockerproject.org/repo">https://apt.dockerproject.org/repo</a> 定向到了<a href="http://mirrors.aliyun.com/">http://mirrors.aliyun.com/</a> 。</p>
+
+<p>解决方法：</p>
+
+<ul>
+<li>将 /etc/apt/apt.conf
+里 Acquire::<a href="http::Proxy">http::Proxy</a> &ldquo;<a href="http://mirrors.aliyun.com/">http://mirrors.aliyun.com/</a>&rdquo;; 注释掉</li>
+<li>当然也可以配置到阿里的镜像源，速度快还省流量，具体没有实践</li>
+</ul>
+
+
+<p>配置完成后再次更新APT</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ sudo apt-get update 
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>验证下APT是否从正确镜像库拉取</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$  apt-cache policy docker-engine
+</span><span class='line'>
+</span><span class='line'> docker-engine:
+</span><span class='line'>    Installed: 1.12.2-0~trusty
+</span><span class='line'>    Candidate: 1.12.2-0~trusty
+</span><span class='line'>    Version table:
+</span><span class='line'>   *** 1.12.2-0~trusty 0
+</span><span class='line'>          500 https://apt.dockerproject.org/repo/ ubuntu-trusty/main amd64 Packages
+</span><span class='line'>          100 /var/lib/dpkg/status
+</span><span class='line'>       1.12.1-0~trusty 0
+</span><span class='line'>          500 https://apt.dockerproject.org/repo/ ubuntu-trusty/main amd64 Packages
+</span><span class='line'>       1.12.0-0~trusty 0
+</span><span class='line'>          500 https://apt.dockerproject.org/repo/ ubuntu-trusty/main amd64 Packages
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>对于Ubuntu Trusty，Wily和Xenial，使用aufs存储驱动程序需要安装linux-image-extra- *内核包。</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ sudo apt-get update
+</span><span class='line'>$ sudo apt-get install linux-image-extra-$(uname -r) linux-image-extra-virtual
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>终于可以安装docker了，安装最新版本</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ sudo apt-get update
+</span><span class='line'>$ sudo apt-get install docker-engine
+</span><span class='line'>$ sudo service docker start
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>自己跑一个image测试下，docker安装完成，<a href="http://www.baidu.com">后面进行两台ECS实现docker swarm mode</a></p>
+
+<ul>
+<li>es-swarm-1(manager)</li>
+<li>es-swarm-2(worker)</li>
+</ul>
+
+
+<p><a href="http://www.pffair.com/blog/2017/01/11/ecs-docker-swarm/">ECS docker swarm mode  >>></a></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[docker-constraint]]></title>
+    <link href="http://www.pffair.com/blog/2017/01/04/docker-constraint/"/>
+    <updated>2017-01-04T12:59:55+08:00</updated>
+    <id>http://www.pffair.com/blog/2017/01/04/docker-constraint</id>
+    <content type="html"><![CDATA[<p>在docker swarm mode中create service到指定label的node下。</p>
+
+<p>以下操作前提是已经创建好了swarm mode的两个node: swarm-1（manager）、swarm-2(worker)。</p>
+
+<!--more-->
+
+
+<h4>通过node update为swarm-2添加label elk=yes</h4>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker node update \
+</span><span class='line'>        --label-add elk=yes \
+</span><span class='line'>        swarm-2</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>通过在docker service create中指定&ndash;constraint 限制service只能运行到node.labels.elk==yes的节点（就是前面指定的swarm-2节点）</h4>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service create \
+</span><span class='line'>      -p 3000:3000 \
+</span><span class='line'>      --name hello-service \
+</span><span class='line'>      --mode=global \
+</span><span class='line'>      --constraint 'node.labels.elk==yes' \
+</span><span class='line'>      marshalw/hello-service:0.2.2</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>使用docker service ps查看service情况</h4>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'> docker service ps hello-service</span></code></pre></td></tr></table></div></figure>
+
+
+<p><img src="http://www.pffair.com/images/58.png" alt="" /></p>
+
+<p>根据上面的图可以看到hello-service只运行到了swarm-2上。</p>
+
+<h3>测试当节点mount不存在volumn时候是否能正常创建service</h3>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker service rm hello-service
+</span><span class='line'>
+</span><span class='line'>docker service create \
+</span><span class='line'>      -p 3000:3000 \
+</span><span class='line'>      --name hello-service \
+</span><span class='line'>      --mode=global \
+</span><span class='line'>      --constraint 'node.labels.elk==yes' \
+</span><span class='line'>      --mount 'type=bind,source=$PWD,target=/var/lib/hello' \
+</span><span class='line'>      marshalw/hello-service:0.2.2</span></code></pre></td></tr></table></div></figure>
+
+
+<p>查看测试结果</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'> docker service ps hello-service</span></code></pre></td></tr></table></div></figure>
+
+
+<p><img src="http://www.pffair.com/images/59.png" alt="" /></p>
+
+<p>说明可以正常创建，但是不能启动，对于非指定label的节点没有影响</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[tomcat https]]></title>
+    <link href="http://www.pffair.com/blog/2016/07/16/tomcat-apr/"/>
+    <updated>2016-07-16T19:41:31+08:00</updated>
+    <id>http://www.pffair.com/blog/2016/07/16/tomcat-apr</id>
+    <content type="html"><![CDATA[<p>https也就是经过ssl加密的http，配置tomcat支持https协议其实就是tomcat SSL/TSL相关信息的配置实现。以下配置均在ubuntu环境下&hellip;</p>
+
+<!--more-->
+
+
+<p>配置tomcat的SSL首先说下tomcat的运行模式：</p>
+
+<ul>
+<li>BIO： 阻塞式I/O操作，表示Tomcat使用的是传统Java I/O操作。Tomcat7以下版本默认情况下是以BIO模式运行的。每个请求都要创建一个线程来处理，线程开销较大。高并发下表现不好。（阻塞IO采用流方式传输）</li>
+<li>NIO：基于Java NIO。是一个基于缓冲区、并能提供非阻塞I/O操作的Java API（相较阻塞IO的流方式传输，NIO采用块方式传输，将整个流分块再拼装，非阻塞原因在于它内部有一个单独数据监听线程进行块数据的分发，这样工作线程可以有多个）</li>
+<li>APR： 在操作系统级别解决异步IO问题，当然在并发和性能上比前两个都好</li>
+</ul>
+
+
+<p>Tomcat 能够使用两种 SSL 实现：</p>
+
+<ul>
+<li><p>JSSE 实现，它是Java 运行时（从 1.4 版本起）的一部分。JSSE（Java SecuritySocket Extension，Java安全套接字扩展）是Sun为了解决在Internet上的安全通讯而推出的解决方案。它实现了SSL和TSL（传输层安全）协议。在JSSE中包含了数据加密，服务器验证，消息完整性和客户端验证等技术。通过使用JSSE，开发人员可以在客户机和服务器之间通过TCP/IP协议安全地传输数据。这篇文章主要描述如何使用JSSE接口来控制SSL连接。</p></li>
+<li><p>APR 实现，默认使用 OpenSSL 引擎。</p></li>
+</ul>
+
+
+<h2>JSSE实现</h2>
+
+<p>JSSE实现很简单，只要修改tomcat/conf/server.xml 添加如下配置</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'><span class="c">&lt;!-- Define a HTTP/1.1 Connector on port 8443, JSSE NIO implementation --&gt;</span>
+</span><span class='line'><span class="nt">&lt;Connector</span> <span class="na">protocol=</span><span class="s">&quot;org.apache.coyote.http11.Http11NioProtocol&quot;</span>
+</span><span class='line'>           <span class="na">port=</span><span class="s">&quot;8443&quot;</span> <span class="err">...</span><span class="nt">/&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c">&lt;!-- Define a HTTP/1.1 Connector on port 8443, JSSE NIO2 implementation --&gt;</span>
+</span><span class='line'><span class="nt">&lt;Connector</span> <span class="na">protocol=</span><span class="s">&quot;org.apache.coyote.http11.Http11Nio2Protocol&quot;</span>
+</span><span class='line'>           <span class="na">port=</span><span class="s">&quot;8443&quot;</span> <span class="err">...</span><span class="nt">/&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c">&lt;!-- Define a HTTP/1.1 Connector on port 8443, JSSE BIO implementation --&gt;</span>
+</span><span class='line'><span class="nt">&lt;Connector</span> <span class="na">protocol=</span><span class="s">&quot;org.apache.coyote.http11.Http11Protocol&quot;</span>
+</span><span class='line'>           <span class="na">port=</span><span class="s">&quot;8443&quot;</span> <span class="err">...</span><span class="nt">/&gt;</span>
+</span><span class='line'>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>该配置在server.xml其实有，只是默认被注释掉了，也可以打开注释进行修改，实现https的话在也是在这个Connector进行配置，我的配置如下</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'> <span class="nt">&lt;Connector</span> <span class="na">port=</span><span class="s">&quot;8443&quot;</span> <span class="na">acceptCount=</span><span class="s">&quot;100&quot;</span> <span class="na">disableUploadTimeout=</span><span class="s">&quot;true&quot;</span>
+</span><span class='line'>               <span class="na">protocol=</span><span class="s">&quot;org.apache.coyote.http11.Http11NioProtocol&quot;</span>
+</span><span class='line'>               <span class="na">enableLookups=</span><span class="s">&quot;false&quot;</span>
+</span><span class='line'>               <span class="na">maxThreads=</span><span class="s">&quot;150&quot;</span> <span class="na">SSLEnabled=</span><span class="s">&quot;true&quot;</span> <span class="na">scheme=</span><span class="s">&quot;https&quot;</span> <span class="na">secure=</span><span class="s">&quot;true&quot;</span>
+</span><span class='line'>               <span class="na">clientAuth=</span><span class="s">&quot;false&quot;</span> <span class="na">sslProtocol=</span><span class="s">&quot;TLS&quot;</span>
+</span><span class='line'>               <span class="na">keystoreFile=</span><span class="s">&quot;/Users/pangff/.keystore&quot;</span> <span class="na">keystorePass=</span><span class="s">&quot;password&quot;</span><span class="nt">/&gt;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>这里面涉及到了.keystore。生成也很简单</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'>keytool -genkey -alias tomcat -keyalg RSA
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>然后按相关提示填写信息就可以了，最后在用户主目录会生产一个.keystore文件。当然.keystore的存放目录一定要和上面 keystoreFile的配置路径一致。之后重启tomcat 并访问</p>
+
+<pre><code>https://localhost:8443
+</code></pre>
+
+<p>如果正常访问说明配置正确。当然这时候你仍然可以通过http访问tomcat，端口还是之前的8080（如果没改过的话）</p>
+
+<h2>APR实现</h2>
+
+<p>arp方式也是我采用的方式，废了很长时间，遇到了很多问题才成功，配置太麻烦。apr在server.xml中的配置方式和JSSE类似，如下（需要注意的是protocol的配置）</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'><span class="c">&lt;!-- Define a SSL Coyote HTTP/1.1 Connector on port 8443 --&gt;</span>
+</span><span class='line'><span class="nt">&lt;Connector</span>
+</span><span class='line'>           <span class="na">protocol=</span><span class="s">&quot;org.apache.coyote.http11.Http11AprProtocol&quot;</span>
+</span><span class='line'>           <span class="na">port=</span><span class="s">&quot;8443&quot;</span> <span class="na">maxThreads=</span><span class="s">&quot;200&quot;</span>
+</span><span class='line'>           <span class="na">scheme=</span><span class="s">&quot;https&quot;</span> <span class="na">secure=</span><span class="s">&quot;true&quot;</span> <span class="na">SSLEnabled=</span><span class="s">&quot;true&quot;</span>
+</span><span class='line'>           <span class="na">SSLCertificateFile=</span><span class="s">&quot;/usr/local/ssl/server.csr&quot;</span>
+</span><span class='line'>           <span class="na">SSLCertificateKeyFile=</span><span class="s">&quot;/usr/local/ssl/server.key&quot;</span>
+</span><span class='line'>           <span class="na">SSLVerifyClient=</span><span class="s">&quot;optional&quot;</span> <span class="na">SSLProtocol=</span><span class="s">&quot;TLSv1+TLSv1.1+TLSv1.2&quot;</span><span class="nt">/&gt;</span>
+</span><span class='line'>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>配置完成，通过openssl生成相关证书</p>
+
+<h3>生成服务器端的私钥(key文件);</h3>
+
+<pre><code>openssl genrsa -des3 -out server.key 1024
+</code></pre>
+
+<p>运行时会提示输入密码,此密码用于加密key文件(参数des3是加密算法,也可以选用其他安全的算法),以后每当需读取此文件(通过openssl提供的命令或API)都需输入口令.如果不要口令,则可用以下命令去除口令:</p>
+
+<pre><code>openssl rsa -in server.key -out server.key
+</code></pre>
+
+<h3>生成服务器端证书签名请求文件(csr文件);</h3>
+
+<pre><code>openssl req -new -key server.key -out server.csr
+</code></pre>
+
+<p>生成Certificate Signing Request（CSR）,生成的csr文件交给CA签名后形成服务端自己的证书.屏幕上将有提示,依照其 提示一步一步输入要求的个人信息即可(如:Country,province,city,company等).</p>
+
+<p>重启tomcat 访问</p>
+
+<pre><code>https://localhost:8443 
+</code></pre>
+
+<p>发现并不能访问。查看tomcat/logs/catalina.out日志文件，出现如下一个错误</p>
+
+<pre><code>INFO: The Apache Tomcat Native library which allows optimal
+ performance in production environments was not found on the    java.library.path
+</code></pre>
+
+<p>是tomcat native没有安装。该native其实已经在了，tomcat/bin/tomcat-native.tar.gz。解压进入tomcat-native-1.2.7-src/native/。运行如下命令</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'>./configure
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>提示需要&ndash;with-apr=发现APR还没有安装，下面去安装APR</p>
+
+<h3>安装APR</h3>
+
+<pre><code>wget http://mirrors.cnnic.cn/apache//apr/apr-1.5.2.tar.gz
+
+wget http://mirrors.cnnic.cn/apache//apr/apr-util-1.5.4.tar.gz
+</code></pre>
+
+<p>先安装apr-1.5.2。解压后进入执行</p>
+
+<pre><code>./configure &amp;&amp; make &amp;&amp; make install
+</code></pre>
+
+<p>然后安装apr-util-1.5.4</p>
+
+<pre><code>./configure  --with-apr=/usr/local/apr/ &amp;&amp; make &amp;&amp; make install
+</code></pre>
+
+<p>安装APR完成（注意&ndash;with-apr 对应目录是自己apr的安装目录）。</p>
+
+<h3>继续安装tomcat－native</h3>
+
+<p>解压进入tomcat-native-1.2.7-src/native/。运行如下命令</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'>./configure --with-apr=/usr/local/apr/ --with-java_home=/usr/lib/jvm/default-java
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>注意如果已经配置了java_home的环境变量，那么&mdash;with-java_home=/usr/lib/jvm/default-java可以不加。</p>
+
+<ul>
+<li><p>查看java_home环境变量方法</p>
+
+<pre><code>  echo $JAVA_HOME
+</code></pre></li>
+<li><p>查看jdk安装位置方法（采用whereis java并不能找到jdk安装目录）</p>
+
+<pre><code>  whereis jvm
+</code></pre></li>
+<li><p>配置java__home环境变量方法,终端运行（改方法只对当前shell起作用，关闭后环境变量消失）</p>
+
+<pre><code>  export JAVA_HOME=/usr/lib/jvm/default-java
+</code></pre></li>
+<li><p>采用修改.bash_profile文件配置环境变量</p>
+
+<pre><code>  vi ~/.bash_profile
+
+  export JAVA_HOME=/usr/lib/jvm/default-java
+</code></pre></li>
+</ul>
+
+
+<p>再次执行</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'>./configure --with-apr=/usr/local/apr/ --with-java_home=/usr/lib/jvm/default-java
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>发现又出错了，这次的错误是</p>
+
+<pre><code>Found OPENSSL_VERSION_NUMBER 0x1000105f (OpenSSL 1.0.1e 11 Feb 2013)
+Require OPENSSL_VERSION_NUMBER 0x1000200f or greater (1.0.2)
+</code></pre>
+
+<p>需要升级openssl版本到1.0.2，好吧开始升级openssl</p>
+
+<h3>升级openssl</h3>
+
+<pre><code>wget http://www.openssl.org/source/openssl-1.0.2g.tar.gz 
+
+tar -xvzf openssl-1.0.2g.tar.gz 
+
+cd openssl-1.0.2g 
+
+./config 
+
+make sudo
+
+make install
+</code></pre>
+
+<p>安装后检查下openssl的版本</p>
+
+<pre><code>openssl version
+</code></pre>
+
+<p>发现还是1.0.1。检查安装目录发现和原始openssl安装目录不在一起，并没有覆盖。那么进行次配置重新安装，如下</p>
+
+<pre><code>./config --prefix=/usr/ 
+
+make 
+
+sudo make install
+</code></pre>
+
+<p>再检查</p>
+
+<pre><code>openssl version
+</code></pre>
+
+<p>终于对了</p>
+
+<h3>第三次安装tomcat－native</h3>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'>./configure --with-apr=/usr/local/apr/ --with-java_home=/usr/lib/jvm/default-java
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>成功。。。</p>
+
+<p>重启tomcat，访问<a href="https://localhost:8443">https://localhost:8443</a> 正常访问</p>
+
+<h3>题外</h3>
+
+<p>如果要求整个应用采用https方式，那么需要在web.xml进行如下配置</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'><span class="nt">&lt;security-constraint&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;web-resource-collection&gt;</span>
+</span><span class='line'>        <span class="nt">&lt;web-resource-name&gt;</span>securedapp<span class="nt">&lt;/web-resource-name&gt;</span>
+</span><span class='line'>        <span class="nt">&lt;url-pattern&gt;</span>/*<span class="nt">&lt;/url-pattern&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;/web-resource-collection&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;user-data-constraint&gt;</span>
+</span><span class='line'>        <span class="nt">&lt;transport-guarantee&gt;</span>CONFIDENTIAL<span class="nt">&lt;/transport-guarantee&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;/user-data-constraint&gt;</span>
+</span><span class='line'><span class="nt">&lt;/security-constraint&gt;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>将 URL 映射设为 /* ，这样你的整个应用都要求是HTTPS访问，而 transport-guarantee 标签设置为CONFIDENTIAL以便使应用支持SSL。如果你希望关闭 SSL ，需要将 CONFIDENTIAL改为NONE</p>
+
+<h2>备忘常用到的linux命令</h2>
+
+<h3>解压、压缩</h3>
+
+<ul>
+<li><p>.tar</p>
+
+<pre><code>  解包：tar zxvf file.tar
+
+  打包：tar czvf file.tar dfile.gz
+</code></pre></li>
+<li><p>gz　　</p>
+
+<pre><code>  解压1：gunzip file.gz
+
+  解压2：gzip -d dfile.gz
+
+  压缩：gzip file
+</code></pre>
+
+<p>　　</p></li>
+<li><p>.tar.gz 和 .tgz</p>
+
+<pre><code>  解压：tar zxvf FileName.tar.gz
+
+  压缩：tar zcvf FileName.tar.gz DirName
+</code></pre></li>
+</ul>
+
+
+<h3>文件查找</h3>
+
+<pre><code>find / -name filename （全局查找，可以也可以指定文件名）
+
+locate ／targetDir/fileProfix (比find快，查询指定目录以fileProfix开头文件)
+
+whereis program （只用户查找程序名）
+
+which commandName(在PATH变量指定的路径中，搜索某个系统命令的位置)
+</code></pre>
+
+<h3>环境变量配置</h3>
+
+<pre><code>vi ~/.bash_profile
+
+export EVN_NAME=PATH
+</code></pre>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[webrtc实践]]></title>
+    <link href="http://www.pffair.com/blog/2016/06/29/webrtcshi-jian/"/>
+    <updated>2016-06-29T15:21:47+08:00</updated>
+    <id>http://www.pffair.com/blog/2016/06/29/webrtcshi-jian</id>
+    <content type="html"><![CDATA[<p>最近了解了下WebRTC，并使用SimpleWebRTC做了个简单demo，记录下实践过程以及遇到的一些问题。</p>
+
+<!--more-->
+
+
+<p>想要学习了解webrtc可以通过</p>
+
+<ul>
+<li><a href="https://codelabs.developers.google.com/codelabs/webrtc-web/#0/">https://codelabs.developers.google.com/codelabs/webrtc-web/#0/</a></li>
+<li><a href="https://webrtc.github.io/samples">https://webrtc.github.io/samples</a></li>
+</ul>
+
+
+<p>以及一些WebRTC的demo一步步了解相关API。webrtc也有一些优秀的开源框架</p>
+
+<ul>
+<li><a href="http://peerjs.com/">PeerJS</a></li>
+<li><a href="https://easyrtc.com/">EasyRTC</a></li>
+<li><a href="https://simplewebrtc.com/">SimpleWebRTC</a></li>
+</ul>
+
+
+<p>看过WebRTC一些官方开源sample，简单了解了相关通信机制</p>
+
+<p><img src="http://www.html5rocks.com/en/tutorials/webrtc/basics/jsep.png" alt="jsep" /></p>
+
+<p>两个客户端通过singnal server(信令服务器)获取到各自信息，然后两个客户端通过获取到的对方信息建立peer-to-peer的连接，通过这个连接进行数据传递。</p>
+
+<p>我用的是SimpleWebRTC的一个非常简单demo</p>
+
+<h3>客户端及Web服务</h3>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>&lt;!DOCTYPE html&gt;
+</span><span class='line'>&lt;html&gt;
+</span><span class='line'>&lt;head&gt;
+</span><span class='line'>&lt;script src="https://simplewebrtc.com/latest-v2.js"&gt;&lt;/script&gt;
+</span><span class='line'>&lt;/head&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;body&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;div id="localVideo" muted&gt;&lt;/div&gt;
+</span><span class='line'>&lt;div id="remoteVideo"&gt;&lt;/div&gt;
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'>&lt;script&gt;
+</span><span class='line'>var webrtc = new SimpleWebRTC({
+</span><span class='line'>  localVideoEl: 'localVideo',
+</span><span class='line'>  remoteVideosEl: 'remoteVideo',
+</span><span class='line'>  autoRequestMedia: true
+</span><span class='line'>});
+</span><span class='line'>
+</span><span class='line'>webrtc.on('readyToCall', function () {
+</span><span class='line'>  webrtc.joinRoom('My room name');
+</span><span class='line'>});
+</span><span class='line'>&lt;/script&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;/body&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;/html&gt;
+</span><span class='line'>      </span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>
+</span><span class='line'>var static = require('node-static');
+</span><span class='line'>var https = require('https');
+</span><span class='line'>var fs = require("fs");
+</span><span class='line'>var options = {
+</span><span class='line'>  key: fs.readFileSync('./key.pem'),
+</span><span class='line'>  cert: fs.readFileSync('./cert.pem')
+</span><span class='line'>};
+</span><span class='line'>var file = new(static.Server)();
+</span><span class='line'>var app = https.createServer(options,function (req, res) {
+</span><span class='line'>  file.serve(req, res);
+</span><span class='line'>}).listen(2013);
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>这儿需要注意的是必须使用https协议才可以，如果使用http启动后console会出现错误提示。使用https，key.pem 和 cert.pem是自己生成的。生成方式，下载<a href="https://github.com/andyet/signalmaster/blob/master/scripts/generate-ssl-certs.sh">https://github.com/andyet/signalmaster/blob/master/scripts/generate-ssl-certs.sh</a>并运行就可以了，当然也可以直接通过命令，我这是比较偷懒方式。而且signalmaster后面有用到。这时候启动服务。我的服务部在182.xxx.xxx.xxx上</p>
+
+<pre><code>node server.js
+</code></pre>
+
+<p>打开chrome浏览器访问<a href="https://182.xxx.xxx.xxx:2013">https://182.xxx.xxx.xxx:2013</a>选择继续前往并运行开启摄像头后，可以在浏览器上看到自己啦&hellip;</p>
+
+<h3>搭建signal server</h3>
+
+<p>我们使用的是开源的<a href="https://github.com/andyet/signalmaster">signalmaster</a>。直接下载，然后运行node server.js就可以。当然默认是测试环境http协议，如果想要使用生产环境https协议启动需要使用</p>
+
+<pre><code>$ NODE_ENV=production node server.js 
+</code></pre>
+
+<p>然后修改客户端代码,添加信令服务器地址</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>
+</span><span class='line'>var webrtc = new SimpleWebRTC({
+</span><span class='line'>  localVideoEl: 'localVideo',
+</span><span class='line'>  remoteVideosEl: 'remoteVideo',
+</span><span class='line'>  url:'https://182.xxx.xxx.xxx:8888',//信令服务器地址
+</span><span class='line'>  autoRequestMedia: true
+</span><span class='line'>});
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>此时打开chrome的两个标签页，访问<a href="https://182.xxx.xxx.xxx:2013">https://182.xxx.xxx.xxx:2013</a>，会发现除了本人之外多了一个图像区域，一个摄影头看不出来。可以使用在一个局域网内的两台不同设备，我用了Android设备的chrome和Mac的chrome测试，可以看到在自己的画面下方可以看到对方了。</p>
+
+<h3>不同局域网间连通问题</h3>
+
+<p>上面的例子在一个局域网内，或者两个独立外网主机上测试都是可以，但是如果在两个处在不同局域网的主机上测试的话会发现不能连通，这是为什么呢？</p>
+
+<p>先来了解下NAT（Network Address Translation）网络地址转换，也叫做网络掩蔽或者IP掩蔽，是一种在IP封包通过路由器或防火墙时重写来源IP地址或目的IP地址的技术。位于局域网的主机如果要和局域网外主机通信，那么首先需要NAT来将内网IP翻译转换成公网IP；同样外部主机如果要和局域网中的某台主机通信，那么就需要先把目标公网IP转换成目的主机的内网IP。</p>
+
+<p>NAT有几种实现方式，具体的可以看下<a href="http://baike.baidu.com/view/1580678.htm">百科</a>,<a href="https://github.com/andyet/signalmaster">signalmaster</a>采用的是STUN方式和TURN方式，STUN方式网上有很多免费地址<a href="https://github.com/andyet/signalmaster">signalmaster</a>默认用的是</p>
+
+<pre><code>stun:stun.l.google.com:19302
+</code></pre>
+
+<p>具体可以参考<a href="https://github.com/andyet/signalmaster">signalmaster</a>源码中config/production.json的stunservers配置。当然网上也有很多<a href="https://gist.github.com/zziuni/3741933">免费的</a>。然而通过百科可以了解到STUN方式不支持对称NAT（而很多公司都是这种方式），所以还是需要配置TURN，见<a href="https://github.com/andyet/signalmaster">signalmaster</a>config/production.json有turnservers配置。看个图</p>
+
+<p>更详细的学习可以参考</p>
+
+<p><a href="http://www.html5rocks.com/en/tutorials/webrtc/basics/">http://www.html5rocks.com/en/tutorials/webrtc/basics/</a></p>
+
+<p>其他:</p>
+
+<ul>
+<li><a href="https://zh.wikipedia.org/wiki/%E7%BD%91%E7%BB%9C%E5%9C%B0%E5%9D%80%E8%BD%AC%E6%8D%A2">https://zh.wikipedia.org/wiki/%E7%BD%91%E7%BB%9C%E5%9C%B0%E5%9D%80%E8%BD%AC%E6%8D%A2</a></li>
+<li><a href="http://baike.baidu.com/view/1580678.htm">http://baike.baidu.com/view/1580678.htm</a></li>
+<li><a href="https://zh.wikipedia.org/wiki/STUN">https://zh.wikipedia.org/wiki/STUN</a></li>
+<li><a href="https://zh.wikipedia.org/wiki/TURN">https://zh.wikipedia.org/wiki/TURN</a></li>
+<li><a href="http://blog.inet198.cn/?u012377333/article/details/44455183">http://blog.inet198.cn/?u012377333/article/details/44455183</a></li>
+</ul>
+
+
+<h3>搭建TURN Server</h3>
+
+<p>我是在阿里云Unbuntu上安装的，signalmaster、SimpleWebRTC服务都在一起。服务器ip
+182.xxx.xxx.xxx</p>
+
+<pre><code>sudo apt-get update
+sudo apt-get install rfc5766-turn-server
+</code></pre>
+
+<p>配置turnserver.conf,安装完成后可能每个系统默认turnserver.conf位置不同，所以用find命令搜一下就好了</p>
+
+<pre><code>find / -name turnserver.conf
+</code></pre>
+
+<p>然后随便找一个默认文件进行修改，或者自己在某个目录xxx下创建一个turnserver.conf， 修改turnserver.conf，添加如下配置</p>
+
+<pre><code>#中继服务器侦听的IP，如果不写就是全部IPv4 和 Ipv6
+#listening-ip=182.xxx.xxx.xxx
+#中继服务器侦听端口
+listening-port=3478
+#tls侦听端口
+tls-listening-port=5349
+#中继服务器IP
+relay-ip=182.xxx.xxx.xxx
+#中继服务器处理连接线程数
+relay-threads=50
+
+#TURN服务器公开/私有的地址映射,这个适用于服务器在NAT后进行服务器内外网映射,如果不是这种情况可以为空或者公网ip
+#external-ip=182.xxx.xxx.xxx
+
+#使用凭证机制
+lt-cred-mech
+
+#用户配置
+userdb=/etc/turnuserdb.conf
+
+#域配置
+realm=pffair.com
+pidfile=“/var/run/turnserver.pid”
+</code></pre>
+
+<p>turnuser.conf 配置如下</p>
+
+<pre><code>username:password
+</code></pre>
+
+<p>启动turnserver</p>
+
+<pre><code>turnserver -c turnserver.conf
+</code></pre>
+
+<p>访问<a href="https://182.xxx.xxx.xxx:3478">https://182.xxx.xxx.xxx:3478</a> 此时能看到TUTN Server文本，说明启动成功</p>
+
+<p>然后启动signalmaster server 、SimpleWebRTC server。这时候就可以进行两台不同局域网间主机通信了</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[React+Redux learn]]></title>
+    <link href="http://www.pffair.com/blog/2016/05/17/react-redux-learn/"/>
+    <updated>2016-05-17T21:33:55+08:00</updated>
+    <id>http://www.pffair.com/blog/2016/05/17/react-redux-learn</id>
+    <content type="html"><![CDATA[<p>之前一直想尝试react苦于没有时间。最近有前端项目用到所以简单学习总结一下。
+先看一个react的<a href="https://github.com/pangff/react-redux-learn/blob/master/demo01/index.html">hello world</a></p>
+
+<!--more-->
+
+
+<h4>React Hello world</h4>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>&lt;!DOCTYPE html&gt;
+</span><span class='line'>&lt;html&gt;
+</span><span class='line'>  &lt;head&gt;
+</span><span class='line'>    &lt;meta charset="UTF-8"&gt;
+</span><span class='line'>    &lt;script src="../build/react.js"&gt;&lt;/script&gt;
+</span><span class='line'>    &lt;script src="../build/react-dom.js"&gt;&lt;/script&gt;
+</span><span class='line'>    &lt;script src="../build/browser.min.js"&gt;&lt;/script&gt;
+</span><span class='line'>  &lt;/head&gt;
+</span><span class='line'>  &lt;body&gt;
+</span><span class='line'>    &lt;div id="example"&gt;&lt;/div&gt;
+</span><span class='line'>    &lt;script type="text/babel"&gt;
+</span><span class='line'>      ReactDOM.render(
+</span><span class='line'>        &lt;h1&gt;&lt;a href='https://facebook.github.io/react/'&gt;React 官网&lt;/a&gt; &lt;br/&gt;&lt;br/&gt; &lt;a href='http://reactjs.cn/'&gt;React 中文&lt;/a&gt;&lt;/h1&gt;,
+</span><span class='line'>        document.getElementById('example')
+</span><span class='line'>      );
+</span><span class='line'>    &lt;/script&gt;
+</span><span class='line'>  &lt;/body&gt;
+</span><span class='line'>&lt;/html&gt;
+</span><span class='line'>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>代码很简单，引入react相关js。然后使用ReactDOM.render将相关内容渲染到div上。需要注意的是render第一个参数看起来像一组html标签，其实是JSX语法。根据一张图看下JSX渲染机制</p>
+
+<p><img src="http://www.pffair.com/images/50.png" alt="JSX" /></p>
+
+<p>React会将JSX文件翻译成javaScript文件，在运行时React会将javascript转换成虚拟dom，然后将虚拟dom渲染成真实dom节点，当虚拟dom有变化时只会同步最小变化到真实dom，这也是react速度快的原因。</p>
+
+<p><em>为什么先生成虚拟dom再渲染真实dom速度会比直接操作dom快呢？两步为什么比一步快呢？对于单个节点两步肯定是比一步要慢一些，但是我们经常操作的往往都是多层嵌套的复杂节点。举一个表格的数据更新为例，如果直接操作dom的话，我们一般会直接遍历数据然后动态更新全部表格数据，这样有多少单元格那么我们就要同时操作多少节点；而React会先在虚拟dom做这一步，然后和之前数据比较只跟新变化了的单元格的节点。想象一下如果表格有100条数据而只有1个数据变化，操作100个节点和操作1个节点的速度是可想而知的(这些是个人理解欢迎指正)</em></p>
+
+<h4>React 组件</h4>
+
+<p>下面用一个简单<a href="https://github.com/pangff/react-redux-learn/tree/master/demo02">demo</a>来看下react的组件</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>&lt;!DOCTYPE html&gt;
+</span><span class='line'>&lt;html&gt;
+</span><span class='line'>  &lt;head&gt;
+</span><span class='line'>    &lt;script src="../build/react.js"&gt;&lt;/script&gt;
+</span><span class='line'>    &lt;script src="../build/react-dom.js"&gt;&lt;/script&gt;
+</span><span class='line'>    &lt;script src="../build/browser.min.js"&gt;&lt;/script&gt;
+</span><span class='line'>  &lt;/head&gt;
+</span><span class='line'>  &lt;body&gt;
+</span><span class='line'>    &lt;div id="example"&gt;&lt;/div&gt;
+</span><span class='line'>    &lt;script src="./app.js" type="text/babel"&gt;&lt;/script&gt;
+</span><span class='line'>  &lt;/body&gt;
+</span><span class='line'>&lt;/html&gt;</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>/**
+</span><span class='line'> * Created by pangff on 16/5/5.
+</span><span class='line'> */
+</span><span class='line'>var Activity = React.createClass({
+</span><span class='line'>    render:function() {
+</span><span class='line'>        return (
+</span><span class='line'>            &lt;div style=&gt;
+</span><span class='line'>                &lt;h1&gt;Activity&lt;/h1&gt;
+</span><span class='line'>            &lt;/div&gt;
+</span><span class='line'>        );
+</span><span class='line'>    }
+</span><span class='line'>});
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'>var Share = React.createClass({
+</span><span class='line'>
+</span><span class='line'>    render:function() {
+</span><span class='line'>        return (
+</span><span class='line'>            &lt;div style=&gt;
+</span><span class='line'>                &lt;h1&gt;Share&lt;/h1&gt;
+</span><span class='line'>            &lt;/div&gt;
+</span><span class='line'>        );
+</span><span class='line'>    }
+</span><span class='line'>});
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'>var ShareRank = React.createClass({
+</span><span class='line'>
+</span><span class='line'>    render:function() {
+</span><span class='line'>        return (
+</span><span class='line'>            &lt;div style=&gt;
+</span><span class='line'>                &lt;h1&gt;ShareRank&lt;/h1&gt;
+</span><span class='line'>            &lt;/div&gt;
+</span><span class='line'>        );
+</span><span class='line'>    }
+</span><span class='line'>});
+</span><span class='line'>
+</span><span class='line'> var MyApp = React.createClass({
+</span><span class='line'>
+</span><span class='line'>    render:function() {
+</span><span class='line'>        return (
+</span><span class='line'>            &lt;div&gt;
+</span><span class='line'>                &lt;Share/&gt;
+</span><span class='line'>                &lt;Activity /&gt;
+</span><span class='line'>                &lt;ShareRank /&gt;
+</span><span class='line'>            &lt;/div&gt;
+</span><span class='line'>        );
+</span><span class='line'>    }
+</span><span class='line'>});
+</span><span class='line'>
+</span><span class='line'>ReactDOM.render(&lt;MyApp /&gt;,document.getElementById('example'));
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>代码也很简单，我们在index.html中引入了app.js。这个demo我们是设想一个页面可以划分为分享块、活动块、分享排名块，而react的组件非常有利于这样划分的实现。我们可以将页面划分为Share、Activity、ShareRank三个组件，这样有利于组件复用，并有利于模块化和开发人员的分工。看下丑陋的运行效果</p>
+
+<p><img src="http://www.pffair.com/images/51.png" alt="react组件化" /></p>
+
+<h4>React 组件生命周期</h4>
+
+<p>看个图</p>
+
+<p><img src="http://www.pffair.com/images/52.jpg" alt="react生命周期" /></p>
+
+<p>根据图可以看到，可以大体将整个生命周期划分为3部分，初始化、运行中、卸载。</p>
+
+<p>初始化过程：</p>
+
+<ul>
+<li>getDefaultProps：在第一次启动组件时会调用,获取初始化的props数据</li>
+<li>getInitialState：在第一次启动组件时会调用,获取初始化的state数据</li>
+<li>componentWillMount：服务器端和客户端都只调用一次，在初始化渲染执行之前立刻调用。如果在这个方法内调用 setState，render() 将会感知到更新后的 state，将会执行仅一次，尽管 state 改变了</li>
+<li>render：返回虚拟Dom</li>
+<li>componentDidMount：在初始化渲染执行之后立刻调用一次，仅客户端有效（服务器端不会调用）。在生命周期中的这个时间点，组件拥有一个 DOM 展现，你可以通过 this.getDOMNode() 来获取相应 DOM 节点</li>
+</ul>
+
+
+<p>运行中：</p>
+
+<ul>
+<li>componentWillReceiveProps：在组件接收到新的 props 的时候调用。在初始化渲染的时候，该方法不会调用。
+用此函数可以作为 react 在 prop 传入之后， render() 渲染之前更新 state 的机会。老的 props 可以通过 this.props 获取到。在该函数中调用 this.setState() 将不会引起第二次渲染。</li>
+<li>shouldComponentUpdate：在接收到新的 props 或者 state，将要渲染之前调用。该方法在初始化渲染的时候不会调用，在使用 forceUpdate 方法的时候也不会。
+如果确定新的 props 和 state 不会导致组件更新，则此处应该 返回 false。
+如果 shouldComponentUpdate 返回 false，则 render() 将不会执行，直到下一次 state 改变。（另外，componentWillUpdate 和 componentDidUpdate 也不会被调用。）默认情况下，shouldComponentUpdate 总会返回 true，在 state 改变的时候避免细微的 bug，但是如果总是小心地把 state 当做不可变的，在 render() 中只从 props 和 state 读取值，此时你可以覆盖 shouldComponentUpdate 方法，实现新老 props 和 state 的比对逻辑。如果性能是个瓶颈，尤其是有几十个甚至上百个组件的时候，使用 shouldComponentUpdate 可以提升应用的性能。</li>
+<li>componentWillUpdate：componentWillUpdate(object nextProps, object nextState)
+在接收到新的 props 或者 state 之前立刻调用。在初始化渲染的时候该方法不会被调用。
+使用该方法做一些更新之前的准备工作。你不能在该方法中使用 this.setState()。如果需要更新 state 来响应某个 prop 的改变，请使用 componentWillReceiveProps。</li>
+<li>componentDidUpdate：componentDidUpdate(object prevProps, object prevState)
+在组件的更新已经同步到 DOM 中之后立刻被调用。该方法不会在初始化渲染的时候调用。
+使用该方法可以在组件更新之后操作 DOM 元素。</li>
+</ul>
+
+
+<p>卸载：</p>
+
+<ul>
+<li>componentWillUnmount:componentWillUnmount()
+在组件从 DOM 中移除的时候立刻被调用。在该方法中执行任何必要的清理，比如无效的定时器，或者清除在 componentDidMount 中创建的 DOM 元素。</li>
+</ul>
+
+
+<p>再看个简单<a href="https://github.com/pangff/react-redux-learn/tree/master/demo03">demo</a></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>
+</span><span class='line'>&lt;!DOCTYPE html&gt;
+</span><span class='line'>&lt;html&gt;
+</span><span class='line'>  &lt;head&gt;
+</span><span class='line'>    &lt;script src="../build/react.js"&gt;&lt;/script&gt;
+</span><span class='line'>    &lt;script src="../build/react-dom.js"&gt;&lt;/script&gt;
+</span><span class='line'>    &lt;script src="../build/browser.min.js"&gt;&lt;/script&gt;
+</span><span class='line'>  &lt;/head&gt;
+</span><span class='line'>  &lt;body&gt;
+</span><span class='line'>    &lt;div id="example"&gt;&lt;/div&gt;
+</span><span class='line'>    &lt;script src="./app.js" type="text/babel"&gt;&lt;/script&gt;
+</span><span class='line'>  &lt;/body&gt;
+</span><span class='line'>&lt;/html&gt;
+</span><span class='line'>
+</span><span class='line'>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+<span class='line-number'>78</span>
+<span class='line-number'>79</span>
+<span class='line-number'>80</span>
+<span class='line-number'>81</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>
+</span><span class='line'>var Share = React.createClass({
+</span><span class='line'>    componentWillMount: function () {
+</span><span class='line'>        console.log("Share&gt;&gt;&gt;&gt;componentWillMount")
+</span><span class='line'>    },
+</span><span class='line'>    componentDidMount: function () {
+</span><span class='line'>        console.log("Share&gt;&gt;&gt;&gt;componentDidMount")
+</span><span class='line'>    },
+</span><span class='line'>    componentWillReceiveProps: function () {
+</span><span class='line'>        console.log("Share&gt;&gt;&gt;&gt;componentWillReceiveProps")
+</span><span class='line'>    },
+</span><span class='line'>    shouldComponentUpdate: function () {
+</span><span class='line'>        console.log("Share&gt;&gt;&gt;&gt;shouldComponentUpdate")
+</span><span class='line'>        return true;
+</span><span class='line'>    },
+</span><span class='line'>    componentWillUpdate: function () {
+</span><span class='line'>        console.log("Share&gt;&gt;&gt;&gt;componentWillUpdate")
+</span><span class='line'>    },
+</span><span class='line'>    componentDidUpdate: function () {
+</span><span class='line'>        console.log("Share&gt;&gt;&gt;&gt;componentDidUpdate")
+</span><span class='line'>    },
+</span><span class='line'>    componentWillUnmount: function () {
+</span><span class='line'>        console.log("Share&gt;&gt;&gt;&gt;componentWillUnmount")
+</span><span class='line'>    },
+</span><span class='line'>    render: function () {
+</span><span class='line'>        var params = this.props.params;
+</span><span class='line'>        return (
+</span><span class='line'>            &lt;div style=&gt;
+</span><span class='line'>                &lt;h1&gt;Share=={params}&lt;/h1&gt;
+</span><span class='line'>            &lt;/div&gt;
+</span><span class='line'>        );
+</span><span class='line'>    }
+</span><span class='line'>});
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'>var MyApp = React.createClass({
+</span><span class='line'>    getInitialState:function(){
+</span><span class='line'>        console.log("MyApp&gt;&gt;&gt;&gt;getInitialState")
+</span><span class='line'>        return {shareParams:'0'}
+</span><span class='line'>    },
+</span><span class='line'>    getDefaultProps:function(){
+</span><span class='line'>        console.log("MyApp&gt;&gt;&gt;&gt;getDefaultProps")
+</span><span class='line'>        return {shareParams:'0'}
+</span><span class='line'>    },
+</span><span class='line'>    componentWillMount: function () {
+</span><span class='line'>        console.log("MyApp&gt;&gt;&gt;&gt;componentWillMount")
+</span><span class='line'>    },
+</span><span class='line'>    componentDidMount: function () {
+</span><span class='line'>        console.log("MyApp&gt;&gt;&gt;&gt;componentDidMount")
+</span><span class='line'>    },
+</span><span class='line'>    componentWillReceiveProps: function () {
+</span><span class='line'>        console.log("MyApp&gt;&gt;&gt;&gt;componentWillReceiveProps")
+</span><span class='line'>    },
+</span><span class='line'>    shouldComponentUpdate: function () {
+</span><span class='line'>        console.log("MyApp&gt;&gt;&gt;&gt;shouldComponentUpdate")
+</span><span class='line'>        return true;
+</span><span class='line'>    },
+</span><span class='line'>    componentWillUpdate: function () {
+</span><span class='line'>        console.log("MyApp&gt;&gt;&gt;&gt;componentWillUpdate")
+</span><span class='line'>    },
+</span><span class='line'>    componentDidUpdate: function () {
+</span><span class='line'>        console.log("MyApp&gt;&gt;&gt;&gt;componentDidUpdate")
+</span><span class='line'>    },
+</span><span class='line'>    componentWillUnmount: function () {
+</span><span class='line'>        console.log("MyApp&gt;&gt;&gt;&gt;componentWillUnmount")
+</span><span class='line'>    },
+</span><span class='line'>    changeShareParam:function(){
+</span><span class='line'>        console.log("MyApp&gt;&gt;&gt;&gt;changeShareParam")
+</span><span class='line'>        this.setState({shareParams:'1'});
+</span><span class='line'>    },
+</span><span class='line'>    render: function () {
+</span><span class='line'>        return (
+</span><span class='line'>            &lt;div&gt;
+</span><span class='line'>                &lt;button onClick={this.changeShareParam}&gt;修改share参数&lt;/button&gt;
+</span><span class='line'>                &lt;Share params={this.state.shareParams}/&gt;
+</span><span class='line'>            &lt;/div&gt;
+</span><span class='line'>        );
+</span><span class='line'>    }
+</span><span class='line'>});
+</span><span class='line'>
+</span><span class='line'>ReactDOM.render(&lt;MyApp /&gt;, document.getElementById('example'));
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>这个demo中我们打印了父组件和子组件的生命周期，看下运行结果</p>
+
+<p><img src="http://www.pffair.com/images/57-2.png" alt="react生命周期" /></p>
+
+<p>首次加载-日志</p>
+
+<ul>
+<li>MyApp>>>>getDefaultProps</li>
+<li>MyApp>>>>getInitialState</li>
+<li>MyApp>>>>componentWillMount</li>
+<li>Share>>>>componentWillMount</li>
+<li>Share>>>>componentDidMount</li>
+<li>MyApp>>>>componentDidMount</li>
+</ul>
+
+
+<p>点击按钮后－日志</p>
+
+<ul>
+<li>MyApp>>>>changeShareParam</li>
+<li>MyApp>>>>shouldComponentUpdate</li>
+<li>MyApp>>>>componentWillUpdate</li>
+<li>Share>>>>componentWillReceiveProps</li>
+<li>Share>>>>shouldComponentUpdate</li>
+<li>Share>>>>componentWillUpdate</li>
+<li>Share>>>>componentDidUpdate</li>
+<li>MyApp>>>>componentDidUpdate</li>
+</ul>
+
+
+<p>根据日志可以了解到运行结果和生命周期的图是一致的。</p>
+
+<h4>React 数据事件传递（props，state）</h4>
+
+<p>React中通过props来进行父组件到子组件间的数据传递，通过state来控制本组件内部的数据状态变化。当本组件的props和state发生变化时一般都会触发页面的重新渲染（一般是指还要根据shouldComponentUpdate返回true和false的状态等判定）。而子组件和父组件通信是通过父组件将一个回调事件通过props传递给子组件，然后子组件内部调用改回调方法并将需要的参数数据通过方法参数传给父组件。具体依旧可参考上面的例子中MyApp render的button事件处理</p>
+
+<p>关于state和props的区别，本人理解是：</p>
+
+<ul>
+<li>props做组件间的数据传递，由父组件传递（或getDefaultProps）初始化，在组件内部不可变</li>
+<li>state是组件内私有，通过setState改变state数据，达到更新当前组件页面状态效果</li>
+</ul>
+
+
+<p>理解有限，推荐大家可以详细看下官网相关内容：</p>
+
+<ul>
+<li><a href="https://facebook.github.io/react/tips/communicate-between-components.html">Communicate Between Components</a></li>
+<li><a href="https://facebook.github.io/react/docs/transferring-props.html">Transferring Props</a></li>
+<li><a href="https://facebook.github.io/react/docs/interactivity-and-dynamic-uis.html">Interactivity and Dynamic UIs</a></li>
+</ul>
+
+
+<h4>Redux</h4>
+
+<p>react在传统MVC架构模式中，只是单单的View。因此在复杂项目中，数据处理和View以及相关业务都要参杂在一起。facebook出了flux来搭配react进行相关数据流的处理。Redux由Flux演变，受Elm启发，避开Flux复杂性。下面只简单了解写Redux的结构，具体学习Redux推荐大家看<a href="http://redux.js.org/">Redux的官网</a>,英语不好可以看<a href="https://github.com/camsong/redux-in-chinese">中文版</a></p>
+
+<p> 来看张图</p>
+
+<p> <img src="http://www.pffair.com/images/54.png" alt="Redux结构" /></p>
+
+<p> 先了解下图上几个名词意义：</p>
+
+<ul>
+<li>Views：就是普通dom，可以是普通dom，可以是react的组件，取决于用什么来实现</li>
+<li>Action Creator：其实就是普通js function，可以理解为产生Action的方法</li>
+<li>Action：普通js对象，存储了事件的类型、和事件要改变为的数据</li>
+<li>state：全局状态数据存储树，可以理解为整个应用的状态数据中心，请和React的state区别，他们没有任何直接关系</li>
+<li>reducer：一个方法，接收旧的state和action作为参数，返回一个新的state。combineReducers就是多个reducer的集合</li>
+<li>store：可以理解为一个枢纽或管理者，它将action和上一次的state分发给reducer，reducer根据旧的state和action进行数据处理返回一个新的state，然后store通知view层数据变化，view层会拿到变化后的state来进行相关页面渲染</li>
+</ul>
+
+
+<p>了解了相关名词其实Redux的工作原理基本就清晰了，也是一个单向数据流（这里不讨论单项数据流双向数据流的优劣，各有优势）。view的每次操作都看成是触发一个Action，当然这个action可以用方法（也就是action creator）封装一下，然后用store.dispath(action)将这个action分发到reducer，reducer根据上一次的state和当前的action做出处理后返回新的state，然后store通知view state数据发生了变化，view拿到新的state进行页面处理</p>
+
+<h4>Redux middleware</h4>
+
+<p> 还是先看图</p>
+
+<p> <img src="http://www.pffair.com/images/55.png" alt="Redux middleware结构" /></p>
+
+<p> 根据图看到相比上一个图Actions和reducer之间多了一层middleware。顾名思义，它作为中间件就是在action最终由store分发前对action做一些处理，比如加一些日志调试，比如加异步处理（异步处理必须通过中间件<a href="https://github.com/gaearon/redux-thunk">redux-thunk</a>,因为store.dispath(action)仅仅是简单的调用了reducer方法，而reducer要求action必须是一个普通对象不能是function）。</p>
+
+<h4>Redux 学习</h4>
+
+<p>上面只是简单Redux的介绍，关于具体学习推荐几个网址：</p>
+
+<ul>
+<li><a href="http://redux.js.org">redux官网</a></li>
+<li><a href="http://cn.redux.js.org">redux中文</a></li>
+<li><a href="https://github.com/happypoulp/redux-tutorial">redux的人门教程请参考教程项目</a></li>
+</ul>
+
+
+<p>学习的话建议还是先将官网文档过一遍，然后把文档中的例子以及后面教程的例子完全搞懂</p>
+
+<h4>React－Redux</h4>
+
+<p>了解了React和Redux，那么怎么将两者结合起来呢。其实有心的读者应该已经知晓，无非是将Redux的View换成React，因为React本身就是View层嘛。其实React和Redux结合无非是要解决两个问题：</p>
+
+<ul>
+<li>如何在React层中拿到Redux的store，进而可以通过store去分发action</li>
+<li>如何在Redux的state发生变化时候通知React，并且Redux－state数据和React props以及组件内state数据的绑定(当redux state发生变化时候，react相应绑定的state发生变化)</li>
+</ul>
+
+
+<p><a href="https://github.com/reactjs/react-redux">react-redux</a>解决了这两个问题，具体结合方式看一个图</p>
+
+<p> <img src="http://www.pffair.com/images/56.png" alt="React-Redux结构" /></p>
+
+<p> <a href="https://github.com/reactjs/react-redux">react-redux</a>通过Provider解决了第一个问题。Provider其实是一个经过封装的React组件，它会将redux的store传递给所有子组件；如果将Provider作为React应用最外层组件，那么整个应用的全部组件都会拿到store。根据图也能很清晰看到这点。</p>
+
+<p> <a href="https://github.com/reactjs/react-redux">react-redux</a>通过connect解决了第二个问题。它将redux的state数据和react的props做了绑定，并且包装了action creator用于响应用户的操作，同时通过观察者模式监听了redux state数据变化并自动调用了react的setState。</p>
+
+<p> 具体的细节推荐大家看下<a href="https://github.com/reactjs/react-redux/blob/master/docs/api.md">文档</a></p>
+
+<p>有一个<a href="https://github.com/lewis617/react-redux-tutorial">react-redux的人门教程</a>也不错。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[WebView图片上传的各种坑]]></title>
+    <link href="http://www.pffair.com/blog/2016/04/01/webview-upload/"/>
+    <updated>2016-04-01T15:56:05+08:00</updated>
+    <id>http://www.pffair.com/blog/2016/04/01/webview-upload</id>
+    <content type="html"><![CDATA[<p>最近项目用到了应用内webview图片上传，虽然最终实现了，但是遇到了各种坑，抽时间总结一下。</p>
+
+<!--more-->
+
+
+<p>我们在应用中用webview加载了一个wap页面，该wap页面需要通过input标签调起本地文件选择。看了前人遗留的webview代码，有重写WebChromeClient的openFileChooser方法，但是经过测试在有些设备上只弹出一次文件选择取消后就再也弹不出来，有些设置上干脆一次都不会弹出来。至此，走向webview文件选择的填坑之路。</p>
+
+<h3>首先解决一次都弹不出的问题。</h3>
+
+<p>经过测试发现这个问题集中在5.0以上的设备，忽然有点儿印象在5.0以上WebChromeClient貌似是做过改动，翻下api发现果然多了一个onShowFileChooser方法。重写WebChromeClient onShowFileChooser 并返回true。这时候在5.0、6.0设备上可以弹出了，但是还是像之前能弹出的设备一样取消后就再也出不来了</p>
+
+<h3>接下来解决某些设备只弹出一次问题</h3>
+
+<p>在stackoverflow搜了半天也没有找到合适答案，于是再看了下onShowFileChooser的api，忽然发现了一句话</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>To cancel the request, call filePathCallback.onReceiveValue(null) and return true.</span></code></pre></td></tr></table></div></figure>
+
+
+<p>恍然大悟，原来取消依然是需要回调onReceiveValue。因此在当前页面onResume时候加上如下代码</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="k">if</span><span class="o">(</span><span class="n">filePathCallback</span><span class="o">!=</span><span class="kc">null</span><span class="o">){</span>
+</span><span class='line'>   <span class="n">filePathCallback</span><span class="o">.</span><span class="na">onReceiveValue</span><span class="o">(</span><span class="kc">null</span><span class="o">);</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>问题得到解决。需要注意的是在onActivityResult中回调后要将filePathCallback置空，否则当选择一个图片或者拍照返回到页面时onActivityResult 和 onResume都会触发，而且onActivityResult 在 onResume之前。因此不在onActivityResult置空filePathCallback的话会触发两次回调，可能会产生问题（没有验证）.</p>
+
+<p>后面进行正常上传，发现onActivityResult一直不回调。因为webview是在Fragmengt中，因此代码中将Activity的onActivityResult委托给了该Activity下面的WebviewFragment中，如下代码</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="k">else</span> <span class="nf">if</span> <span class="o">(</span><span class="n">requestCode</span> <span class="o">==</span> <span class="n">WebViewFragment</span><span class="o">.</span><span class="na">FILECHOOSER_RESULTCODE</span><span class="o">){</span>
+</span><span class='line'>    <span class="k">if</span><span class="o">(</span><span class="n">mFragment</span><span class="o">!=</span><span class="kc">null</span><span class="o">){</span>
+</span><span class='line'>       <span class="n">mFragment</span><span class="o">.</span><span class="na">onActivityResult</span><span class="o">(</span><span class="n">requestCode</span><span class="o">,</span><span class="n">resultCode</span><span class="o">,</span><span class="n">data</span><span class="o">);</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>但是requestCode == WebViewFragment.FILECHOOSER_RESULTCODE的条件判断一直是false，奇怪&hellip;</p>
+
+<h3>Fragment startActivityForResult的坑</h3>
+
+<p>Debug代码进入fragment源码中发现调用顺序是 Fragment［startActivityForResult］->［FragmentActivity］onStartActivityFromFragment -> ［FragmentActivity］ startActivityFromFragment。就在这个方法中,看下源码</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="cm">/**</span>
+</span><span class='line'><span class="cm">     * Called by Fragment.startActivityForResult() to implement its behavior.</span>
+</span><span class='line'><span class="cm">     */</span>
+</span><span class='line'>    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">startActivityFromFragment</span><span class="o">(</span><span class="n">Fragment</span> <span class="n">fragment</span><span class="o">,</span> <span class="n">Intent</span> <span class="n">intent</span><span class="o">,</span>
+</span><span class='line'>            <span class="kt">int</span> <span class="n">requestCode</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>        <span class="k">if</span> <span class="o">(</span><span class="n">requestCode</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>            <span class="kd">super</span><span class="o">.</span><span class="na">startActivityForResult</span><span class="o">(</span><span class="n">intent</span><span class="o">,</span> <span class="o">-</span><span class="mi">1</span><span class="o">);</span>
+</span><span class='line'>            <span class="k">return</span><span class="o">;</span>
+</span><span class='line'>        <span class="o">}</span>
+</span><span class='line'>        <span class="k">if</span> <span class="o">((</span><span class="n">requestCode</span><span class="o">&amp;</span><span class="mh">0xffff0000</span><span class="o">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>            <span class="k">throw</span> <span class="k">new</span> <span class="nf">IllegalArgumentException</span><span class="o">(</span><span class="s">&quot;Can only use lower 16 bits for requestCode&quot;</span><span class="o">);</span>
+</span><span class='line'>        <span class="o">}</span>
+</span><span class='line'>        <span class="kd">super</span><span class="o">.</span><span class="na">startActivityForResult</span><span class="o">(</span><span class="n">intent</span><span class="o">,</span> <span class="o">((</span><span class="n">fragment</span><span class="o">.</span><span class="na">mIndex</span><span class="o">+</span><span class="mi">1</span><span class="o">)&lt;&lt;</span><span class="mi">16</span><span class="o">)</span> <span class="o">+</span> <span class="o">(</span><span class="n">requestCode</span><span class="o">&amp;</span><span class="mh">0xffff</span><span class="o">));</span>
+</span><span class='line'>    <span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>你会发现super.startActivityForResult的requestCode被改变了,后16位前拼了fragment.mIndex+1。这时候你的Ativity将永远不会返回你之前传的requestCode。解决方法,使用activity去调用就可以了</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'> <span class="n">getActivity</span><span class="o">().</span><span class="na">startActivityForResult</span><span class="o">(</span><span class="n">chooserIntent</span><span class="o">,</span> <span class="n">FILECHOOSER_RESULTCODE</span><span class="o">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<p>现在结束了吗？debug包没问题一切正常。试试release，忽然发现又打不开了。难道和混淆有关系？查了一下还真是</p>
+
+<h3>解决混淆问题</h3>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="o">-</span><span class="n">keepclassmembers</span> <span class="kd">class</span> <span class="err">* </span><span class="nc">extends</span> <span class="n">android</span><span class="o">.</span><span class="na">webkit</span><span class="o">.</span><span class="na">WebChromeClient</span> <span class="o">{</span>
+</span><span class='line'>     <span class="kd">public</span> <span class="kt">void</span> <span class="nf">openFileChooser</span><span class="o">(...);</span>
+</span><span class='line'>     <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onShowFileChooser</span><span class="o">(...);</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>终于解决了。</p>
+
+<p>之后又看了一些资料，其实openFileChooser一直都没有在Android API中开放，有个<a href="http://stackoverflow.com/questions/30078217/why-openfilechooser-in-webchromeclient-is-hidden-from-the-docs-is-it-safe-to-us">stackoverflow上的说明比较详细</a></p>
+
+<pre><code>Using the old openFileChooser(...) callbacks does not have any security implications. It's just fine. The only downside is that it will not be called on some platform levels and therefore not work.
+
+void openFileChooser(ValueCallback&lt;Uri&gt; uploadMsg) works on Android 2.2 (API level 8) up to Android 2.3 (API level 10)
+
+openFileChooser(ValueCallback&lt;Uri&gt; uploadMsg, String acceptType) works on Android 3.0 (API level 11) up to Android 4.0 (API level 15)
+openFileChooser(ValueCallback&lt;Uri&gt; uploadMsg, String acceptType, String capture) works on Android 4.1 (API level 16) up to Android 4.3 (API level 18)
+
+onShowFileChooser(WebView webView, ValueCallback&lt;Uri[]&gt; filePathCallback, WebChromeClient.FileChooserParams fileChooserParams) works on Android 5.0 (API level 21) and above
+You can use a library that abstracts this away and takes care of all these callbacks on different platform levels so that it just works.
+
+The fact that it's undocumented just means that you can't rely on it. When it was introduced in Android 2.2, nobody could know that it would stop working in Android 4.4, but you had to accept it.
+</code></pre>
+
+<p>之后测试了几个4.4-5.0直间的设备并没有发现问题，可能国内厂商对系统做了处理吧，没有试原生系统在4.4-5.0区间是否真的有问题，感兴趣的可以试试。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[矢量图路径问题的pathview实现方案]]></title>
+    <link href="http://www.pffair.com/blog/2016/03/24/shi-liang-tu-lu-jing-wen-ti-de-pathviewshi-xian-fang-an/"/>
+    <updated>2016-03-24T13:45:54+08:00</updated>
+    <id>http://www.pffair.com/blog/2016/03/24/shi-liang-tu-lu-jing-wen-ti-de-pathviewshi-xian-fang-an</id>
+    <content type="html"><![CDATA[<p>在前面博客<a href="http://www.pffair.com/blog/categories/svg/">关于矢量路线图动态路径在Android实现方案</a>中，根据一些资料简单制定了一些实现方案，该文简单介绍下pathview方案的实现过程</p>
+
+<!--more-->
+
+
+<h4>先上图看下最终的效果</h4>
+
+<p><img src="http://www.pffair.com/images/48.png" alt="初始化" />
+<img src="http://www.pffair.com/images/49.png" alt="点击高亮显示指定路径后" /></p>
+
+<h3>实现思路</h3>
+
+<p>运行了<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a> 了解到该项目实现了在svg图上进行路径绘制的效果，因此根据android-pathview项目的源码能找到实现思路。看过<a href="https://github.com/geftimov/android-pathview">android-pathview</a> 项目源码后，发现要走的路还很长。</p>
+
+<h4>android-pathview项目的实现思路</h4>
+
+<ul>
+<li>基于<a href="https://github.com/BigBadaboom/androidsvg">androidsvg</a> 之上，自定义Pathview模拟加载svg资源到自定义canvas，为什么叫模拟加载，其实Canvas是new出来的并没有真正渲染到视图上</li>
+<li>通过重写Canvas的drawPath方法后可以获取到的svg元素解析后的path路径(androidsvg实现)</li>
+<li>将获取到的path添加到一个list中</li>
+<li>重新绘制Pathview,(onDraw方法中遍历path绘制，之后正常绘制svg)</li>
+<li>当然其中还有一些动画方面的东西，忽略不提。</li>
+</ul>
+
+
+<h4>问题</h4>
+
+<ul>
+<li>我要实现svg图的缩放、移动<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a>不支持怎么破？</li>
+<li>我要实现指定路径绘制，注意是指定，而<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a>是全部path都会获取到并绘制，怎么破？</li>
+<li>我要实现svg图层元素的点击并响应，<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a>不支持，怎么破？</li>
+</ul>
+
+
+<h4>思考</h4>
+
+<ul>
+<li>图形缩放、移动；发现了<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a>的SvgUtils rescaleCanvas方法，改方法是做svg图形的渲染，这部分作者做了canvas的移动和缩放。那么我们可以考虑在该方法加入canvas的移动缩放的外部控制，那么图的缩放移动就实现了。最终实践后确认可以</li>
+<li>绘制指定路径，实现元素点击，他们共同的一个问题就是需要svg元素和解析后的path对应。这样我通过输入svg元素的id就能找到它解析后对应的path做指定路径的绘制，通过点击path我就能知道是哪个对应的svg元素被点击了并作出相应的处理。所以对应必须实现。</li>
+<li>在点击事件中有面临的一个问题是，如何判断点击位置是哪个path呢。这个通过Region不难实现</li>
+</ul>
+
+
+<h4>实现</h4>
+
+<ul>
+<li>关于移动部分的实现和path点击事件处理就不多说了</li>
+<li>重点说下svg元素和path的对应解决方法，为了不再花大量时间去阅读<a href="https://github.com/BigBadaboom/androidsvg">androidsvg</a>的代码看svg到android graphics的渲染，我想到的最快的解决方案（当然不一定是好的）是按顺序去对应。经过测试果然drawPath的绘制和svg元素在文档中出现的顺序是一致的（canvas没有做特殊设置，因为不能确定canvase或对齐方式有变化时会不会有影响），那么我们是不是可以根据顺序就能确定该path对应svg的元素呢，答案是肯定的。</li>
+<li>当然不能忽略的一件事是如何顺序获取到svg的全部元素节点，通过简单浏览<a href="https://github.com/BigBadaboom/androidsvg">androidsvg</a>代码发现了getElementsByTagName这个方法（但是它是protected方法，不得已将androidsvg源码拿了过来放到相同包下），它可以根据svg元素类型去搜索到全部该类型的SvgObject。根据我测试的svg文件，发现节点元素渲染成path的有Ellipse、Circle、Path三种，所以我按顺序对svg文件进行了整理，将相同类型元素放在一起，整体按组Ellipse－Circle－Path放置。那么就可以做到在drawPath方法中取得的svg元素和path一一对应，之后存入一个LinkedHashMap中。</li>
+<li>拿到了svg节点和path的对应，那么绘制和事件对应就没有问题了</li>
+</ul>
+
+
+<h4>代码实现</h4>
+
+<p>(<a href="https://github.com/pangff/pff-lib">https://github.com/pangff/pff-lib</a>) 中的VectorPathView部分。
+个人认为实现方式不是很好，而且要求svg规则有序,有想法的同学欢迎指正</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Android打开pdf文件]]></title>
+    <link href="http://www.pffair.com/blog/2016/03/12/android-pdf/"/>
+    <updated>2016-03-12T17:54:51+08:00</updated>
+    <id>http://www.pffair.com/blog/2016/03/12/android-pdf</id>
+    <content type="html"><![CDATA[<p>项目中有个阅读pdf的需求，总结下几种方案</p>
+
+<!--more-->
+
+
+<h3>方案一：采用GoogleDocs</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>非常简单，而且可以直接通过webview打开线上pdf（不要忘记开启网络权限）</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="nd">@SuppressLint</span><span class="o">(</span><span class="s">&quot;SetJavaScriptEnabled&quot;</span><span class="o">)</span>
+</span><span class='line'><span class="kd">public</span> <span class="kt">void</span> <span class="nf">setDocumentPath</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">path</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">WebView</span> <span class="n">webView</span> <span class="o">=</span> <span class="o">(</span><span class="n">WebView</span><span class="o">)</span> <span class="n">findViewById</span><span class="o">(</span><span class="n">R</span><span class="o">.</span><span class="na">id</span><span class="o">.</span><span class="na">webview</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">webView</span><span class="o">.</span><span class="na">getSettings</span><span class="o">().</span><span class="na">setJavaScriptEnabled</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">webView</span><span class="o">.</span><span class="na">getSettings</span><span class="o">().</span><span class="na">setPluginsEnabled</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">webView</span><span class="o">.</span><span class="na">loadUrl</span><span class="o">(</span><span class="s">&quot;https://docs.google.com/viewer?url=http://www.selab.isti.cnr.it/ws-mate/example.pdf&quot;</span><span class="o">);</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>国内访问google你懂的</li>
+</ul>
+
+
+<p>当然也有解决方案：</p>
+
+<ul>
+<li>可以在自己的服务器做一个代理</li>
+</ul>
+
+
+<h3>方案二：将pdf的Intent抛出</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>也很简单，目前大部分Android设备貌似都有pdf阅读器</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="n">File</span> <span class="n">file</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">File</span><span class="o">(</span><span class="n">Environment</span><span class="o">.</span><span class="na">getExternalStorageDirectory</span><span class="o">().</span><span class="na">getAbsolutePath</span><span class="o">()</span> <span class="o">+</span><span class="s">&quot;/&quot;</span><span class="o">+</span> <span class="n">filename</span><span class="o">);</span>
+</span><span class='line'><span class="n">Intent</span> <span class="n">target</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">Intent</span><span class="o">(</span><span class="n">Intent</span><span class="o">.</span><span class="na">ACTION_VIEW</span><span class="o">);</span>
+</span><span class='line'><span class="n">target</span><span class="o">.</span><span class="na">setDataAndType</span><span class="o">(</span><span class="n">Uri</span><span class="o">.</span><span class="na">fromFile</span><span class="o">(</span><span class="n">file</span><span class="o">),</span><span class="s">&quot;application/pdf&quot;</span><span class="o">);</span>
+</span><span class='line'><span class="n">target</span><span class="o">.</span><span class="na">setFlags</span><span class="o">(</span><span class="n">Intent</span><span class="o">.</span><span class="na">FLAG_ACTIVITY_NO_HISTORY</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">Intent</span> <span class="n">intent</span> <span class="o">=</span> <span class="n">Intent</span><span class="o">.</span><span class="na">createChooser</span><span class="o">(</span><span class="n">target</span><span class="o">,</span> <span class="s">&quot;Open File&quot;</span><span class="o">);</span>
+</span><span class='line'><span class="k">try</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">startActivity</span><span class="o">(</span><span class="n">intent</span><span class="o">);</span>
+</span><span class='line'><span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="n">ActivityNotFoundException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="c1">// Instruct the user to install a PDF reader here, or something</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>不能在应用内打开，如果用户手机没有pdf阅读器就不行了</li>
+</ul>
+
+
+<p>方案三：使用Android PdfRenderer</p>
+
+<p>优势：</p>
+
+<ul>
+<li>应用内集成</li>
+</ul>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>不能滚动，只能单页，操作不方便</li>
+</ul>
+
+
+<h3>方案四：集成三方pdf sdk</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>应用内集成，有现成解决方案</li>
+</ul>
+
+
+<p>推荐三方sdk：</p>
+
+<ul>
+<li><a href="https://www.qoppa.com/android/pdfsdk/">https://www.qoppa.com/android/pdfsdk/</a>  使用了下demo感觉体验不是很好</li>
+<li><a href="https://code.google.com/archive/p/mupdf">https://code.google.com/archive/p/mupdf</a> 貌似需要编译</li>
+<li>当然还有比较不错的需要收费</li>
+</ul>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>应用包会变大，三方出现问题的话，不好调试</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[关于矢量路线图动态路径在Android实现方案]]></title>
+    <link href="http://www.pffair.com/blog/2016/03/11/svg-android/"/>
+    <updated>2016-03-11T12:00:42+08:00</updated>
+    <id>http://www.pffair.com/blog/2016/03/11/svg-android</id>
+    <content type="html"><![CDATA[<p>最近遇到svg路线图渲染问题，查一些资料总结下解决方案</p>
+
+<!--more-->
+
+
+<h3>方案一：svg＋VectorDrawable</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>Android在5.0以后开始支持VectorDrawable矢量图渲染</li>
+<li>Android Support Library 23.2已经提供向下兼容</li>
+</ul>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>不是全部svg标签都支持，因为svg本身没有完善规范；所以需要修改svg标签到vector支持的标签这个也有三方库去做转化</li>
+<li>不支持动态矢量节点的修改如果要达到路径动态渲染需要内存中修改节点内容，重新渲染到ImageView，速度问题需要验证</li>
+<li>大图加载速度问题需要验证</li>
+<li>内存问题需要验证</li>
+</ul>
+
+
+<h3>方案二：纯三方库</h3>
+
+<p>AndroidSVG：</p>
+
+<ul>
+<li><p>支持svg1.1 － 1.2 大部分标签</p></li>
+<li><p>网址: <a href="https://code.google.com/p/androidsvg/">https://code.google.com/p/androidsvg/</a></p></li>
+<li><p>最新release:  1.2.2-beta-1 (16 June 2014)，还在维护1.3版本有计划提出</p></li>
+<li><p>已知问题：</p>
+
+<ul>
+<li>Stroking of underlined or strike through text is not supported in versions of Android prior to 4.2</li>
+<li>Android 4.3 bug that breaks the <clipPath> feature when using renderToPicture()</li>
+<li>SVGImageView has documented issues in Android Studio</li>
+<li>复杂图形渲染和长度限制</li>
+</ul>
+</li>
+<li>例子项目：
+<a href="https://github.com/bmarrdev/CountryRank">https://github.com/bmarrdev/CountryRank</a></li>
+</ul>
+
+
+<p>svg-android：</p>
+
+<ul>
+<li>svg渲染到canvas上</li>
+<li><p>已经废弃，最后更新2012年</p></li>
+<li><p>网址: <a href="https://github.com/pents90/svg-android/tree/master/svgandroid">https://github.com/pents90/svg-android/tree/master/svgandroid</a></p></li>
+</ul>
+
+
+<p>svg-android-2：</p>
+
+<ul>
+<li><p>修改了svg-android的一些bug</p></li>
+<li><p>svg-android的fork版本最后更新在2014,</p></li>
+<li>网址: <a href="http://code.google.com/p/svg-android-2/">http://code.google.com/p/svg-android-2/</a></li>
+</ul>
+
+
+<p>TPSVG Android SVG Library</p>
+
+<ul>
+<li>速度更快，提供了callback 可以操纵image的节点</li>
+<li>2013年最后更新</li>
+</ul>
+
+
+<p>android-pathview:</p>
+
+<ul>
+<li>基于androidsvg－1.2.1，在它的基础上进行了修改添加了path动画支持，看了源码，其实是在Canvas回调中获取到全部svg path路径做单独渲染，思路可以借鉴</li>
+<li>最后一次更新2016年2月20日 关注961 fork197</li>
+<li>网址：<a href="https://github.com/geftimov/android-pathview/commits/master">https://github.com/geftimov/android-pathview/commits/master</a></li>
+</ul>
+
+
+<h3>方案三：自定义图元＋数据＋原生绘制</h3>
+
+<p>优势：</p>
+
+<ul>
+<li>这种方式是种一定可以实现的方式，也是一种常规解决方法，全部问题都可控</li>
+</ul>
+
+
+<p>缺点：</p>
+
+<ul>
+<li>只针对具体问题，换个项目都要重新编写图元，重用性基本没有</li>
+<li>数据到屏幕的点转化是个问题</li>
+<li>是否要添加手势操作，手势放大缩小后整个图的渲染细节处理</li>
+<li>可能隐含有未知技术问题</li>
+</ul>
+
+
+<h3>总结：</h3>
+
+<ul>
+<li>首先尝试VectorDrawable，并结合pathview思路去解决路径动态控制问题</li>
+<li>其次尝试基于AndroidSVG项目的 pathview思想</li>
+<li>解决问题前两种都失败情况下采用第三种</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[对象池的使用]]></title>
+    <link href="http://www.pffair.com/blog/2015/03/30/dui-xiang-chi-de-shi-yong/"/>
+    <updated>2015-03-30T10:38:04+08:00</updated>
+    <id>http://www.pffair.com/blog/2015/03/30/dui-xiang-chi-de-shi-yong</id>
+    <content type="html"><![CDATA[<p>在android开发中经常会发现当日志中出现大量GC时我们的应用常常出现卡顿。这是因为当虚拟机进行垃圾回收操作时应用所有线程都会暂停，完成后恢复。如果出现大量GC操作时主线程频繁暂停就会影响应用性能了。所以我们在开发中要尽量避免。</p>
+
+<!--more-->
+
+
+<h2>了解Android 垃圾回收</h2>
+
+<p>Android里面是一个三级Generation的内存模型，最近分配的对象会存放在Young Generation区域，当这个对象在这个区域停留的时间达到一定程度，它会被移动到Old Generation，最后到Permanent Generation区域。每一个级别的内存区域都有固定的大小，此后不断有新的对象被分配到此区域，当这些对象总的大小快达到这一级别内存区域的阀值时，会触发GC的操作，以便腾出空间来存放其他新的对象。每次GC发生的时候，所有的线程都是暂停状态的。GC所占用的时间和它是哪一个Generation也有关系，Young Generation的每次GC操作时间是最短的，Old Generation其次，Permanent Generation最长。</p>
+
+<p>导致GC频繁执行有两个原因：</p>
+
+<ul>
+<li>Memory Churn内存抖动，内存抖动是因为大量的对象被创建又在短时间内马上被释放。</li>
+<li>瞬间产生大量的对象会严重占用Young Generation的内存区域，当达到阀值，剩余空间不够的时候，也会触发GC。即使每次分配的对象占用了很少的内存，但是他们叠加在一起会增加Heap的压力，从而触发更多其他类型的GC。这个操作有可能会影响到帧率，并使得用户感知到性能问题。</li>
+</ul>
+
+
+<h2>如何避免</h2>
+
+<p>根据上面GC频繁原因我们可以得出一个简单结论，那就是我们的代码中在卡顿那个操作中进行了大量的对象创建。当然这个还可以通过 Android studio的 Memory Monitor 内存浮动观察到；也可以通过Allocation Tracker来跟踪问题出现的位置。但是我认为直接去看卡顿操作部分对应的代码，应该很容易发现。</p>
+
+<h2>如何解决</h2>
+
+<p>回到主题，如果我们发现了大量对象的创建该如何处理呢？</p>
+
+<ul>
+<li>可以优化就优化，比如在onDraw中初始化了一些对象，我们可以考虑是否可以将这些对象初始化到外部（比如构造方法），而不要在视图绘制需要反复调用的方法中去new</li>
+<li>不能优化的采用对象池解决，如果我们这些对象的初始化不可避免，那么我们要考虑对象的复用，采用对象池来解决</li>
+</ul>
+
+
+<h2>对象池</h2>
+
+<p>我们在Android开发中其实可能已经使用过，只是我们没用关注而已。比如在handler发送消息时，Message的初始化经常会用Message.obtain()来实例化Message对象；在View自定义中用到手势速度控制的VelocityTracker。根据源码虽然两者对实现方式不同（Message使用链表、VelocityTracker使用数组），但是原理是一样的。即：</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>初始化一个固定大小池子，我们每次创建对象时候先去池子中找有没有，
+</span><span class='line'>如果有直接取出，没有new出来使用后还到池子里。这样便可达到对象
+</span><span class='line'>复用的目的</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>使用对象池的代价以及注意事项</h2>
+
+<h4>当然使用对象池也是要有一定代价的：</h4>
+
+<ul>
+<li>短时间内生成了大量的对象占满了池子，那么后续的对象是不能复用的</li>
+<li>对象池是静态的，如果池子被占满，当我们离开该页面这些对象可能不再需要，那么池子不释放其中的无用对象还是要占用一定的内存空间</li>
+</ul>
+
+
+<h4>注意事项:</h4>
+
+<ul>
+<li>使用时候申请(obtain)和释放(recycle)成对出现，使用一个对象后一定要释放还给池子</li>
+<li>池子的大小要根据实际情况合理指定。池子太大上面提到的不释放而占用的内存会很大，池子太小对象过多而且因为操作耗而不能立即释放还给池子时候，池子满了，后续对象还是不能复用。所以，根据项目实际场景制定合理的大小是很必要的</li>
+</ul>
+
+
+<h2>对象池的创建方法</h2>
+
+<p>有很多方法都可以实现，比如Message的链表、或者自己实现都可以，但是为了简便这里只说一种最简便方法。采用Android的SynchronizedPool，以一个User的对象池为例</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">User</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="n">String</span> <span class="n">id</span><span class="o">;</span>
+</span><span class='line'>  <span class="kd">public</span> <span class="n">String</span> <span class="n">name</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="n">SynchronizedPool</span><span class="o">&lt;</span><span class="n">User</span><span class="o">&gt;</span> <span class="n">sPool</span> <span class="o">=</span> <span class="k">new</span> <span class="n">SynchronizedPool</span><span class="o">&lt;</span><span class="n">User</span><span class="o">&gt;(</span>
+</span><span class='line'>          <span class="mi">10</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="n">User</span> <span class="nf">obtain</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="n">User</span> <span class="n">instance</span> <span class="o">=</span> <span class="n">sPool</span><span class="o">.</span><span class="na">acquire</span><span class="o">();</span>
+</span><span class='line'>      <span class="k">return</span> <span class="o">(</span><span class="n">instance</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">?</span> <span class="n">instance</span> <span class="o">:</span> <span class="k">new</span> <span class="nf">User</span><span class="o">();</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">recycle</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="n">sPool</span><span class="o">.</span><span class="na">release</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>我们在申请实例化时调用</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="c1">//从对象池中获取，第一次对象池没有，会直接new一个,如果有会复用</span>
+</span><span class='line'><span class="n">User</span> <span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="na">obtain</span><span class="o">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>对象使用完释放时调用</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="c1">//使用完毕务必要将对象归还到对象池</span>
+</span><span class='line'><span class="n">user</span><span class="o">.</span><span class="na">recycle</span><span class="o">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>demo的源代码</h2>
+
+<p><a href="https://github.com/pangff/ObjectPoolDemo">https://github.com/pangff/ObjectPoolDemo</a></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[内存泄漏的监测与修复]]></title>
+    <link href="http://www.pffair.com/blog/2015/03/17/nei-cun-xie-lou-de-jian-ce-yu-xiu-fu/"/>
+    <updated>2015-03-17T15:52:06+08:00</updated>
+    <id>http://www.pffair.com/blog/2015/03/17/nei-cun-xie-lou-de-jian-ce-yu-xiu-fu</id>
+    <content type="html"><![CDATA[<p>在android开发中，我们经常会遇到OutOfMemory的问题。有的由于listview中没有通过ViewHolder复用item，有的由于图片过大没有压缩，当然最多的还是由于我们在开发中不小心造成的内存泄漏。结合本人的开发经验，下面我们来重点看下如何监测我们的内存泄漏问题以及如何定位解决它。</p>
+
+<!--more-->
+
+
+<h4>如何监测</h4>
+
+<p>在我们的开发阶段当出现OutOfMemory的时候，我们往往不能直接根据日志来定位它到底是由于什么造成的。为了解决这个问题，在我们的项目中采用了“面包屑”的原理（就是跟踪纪录每一个Activity的生成和释放）。</p>
+
+<ul>
+<li>我们在BaseApplication（它继承Application，在AndroidManifest.xml的application标签配置android:name）中初始化两个存放Activity的list，分别叫listCurrent、listLeak（采用弱引用WeakReference<Activity>，否则listLeak持有的activity都不能释放）。</li>
+<li>在Activity的onCreate中listCurrent添加该Activity，同时遍历listLeak进行已释放activity的remove(弱引用为空或者get()为空时说明该弱引用的Activity已经释放)</li>
+<li>然后在Activity的onDestory方法中listCurrent进行该activity的remove操作。</li>
+<li>这样当我们捕获全局异常时候，就可以打印出listCurrent、和listLeak，listCurrent就是我们操作过的全部Activity栈，而listLeak就是当前尚未释放的Activity，结合当前应用开启的Activity就可以判断是不是已经关闭的Activity仍然没有释放而存在在listLeak中。</li>
+</ul>
+
+
+<p>如果出现了OutOfMemory，那么我们优先要检查的就是listLeak中并且不在listCurrent中的Activity了。</p>
+
+<h4>如何定位</h4>
+
+<p>找到了这些存在内存泄漏问题的Activity后我们该如何准确定位到，它泄漏的原因呢？那就要用到内存泄漏检测定位的神器DDMS的"DUMP HPROF File"功能结合 MAT(Memory Analyzer，有eclipse插件(<a href="https://eclipse.org/mat/">https://eclipse.org/mat/</a>)，安装后可以直接通过DUMP HPROF File 后自动打开hprof文件)了。</p>
+
+<h4>举个例子</h4>
+
+<p>创建Android项目memoryleakanalyzer</p>
+
+<p>定义BaseApplication</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">BaseApplication</span> <span class="kd">extends</span> <span class="n">Application</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="n">ArrayList</span><span class="o">&lt;</span><span class="n">Activity</span><span class="o">&gt;</span> <span class="n">listCurrent</span><span class="o">;</span><span class="c1">//当前activity列表</span>
+</span><span class='line'>  <span class="kd">public</span> <span class="n">ArrayList</span><span class="o">&lt;</span><span class="n">WeakReference</span><span class="o">&lt;</span><span class="n">Activity</span><span class="o">&gt;&gt;</span> <span class="n">listLeak</span><span class="o">;</span><span class="c1">//泄漏列表</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="n">BaseApplication</span> <span class="n">instance</span><span class="o">;</span>
+</span><span class='line'>  
+</span><span class='line'>  <span class="nd">@Override</span>
+</span><span class='line'>  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onCreate</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="kd">super</span><span class="o">.</span><span class="na">onCreate</span><span class="o">();</span>
+</span><span class='line'>      <span class="n">instance</span> <span class="o">=</span> <span class="k">this</span><span class="o">;</span>
+</span><span class='line'>      <span class="n">listCurrent</span> <span class="o">=</span> <span class="k">new</span> <span class="n">ArrayList</span><span class="o">&lt;</span><span class="n">Activity</span><span class="o">&gt;();</span>
+</span><span class='line'>      <span class="n">listLeak</span> <span class="o">=</span> <span class="k">new</span> <span class="n">ArrayList</span><span class="o">&lt;</span><span class="n">WeakReference</span><span class="o">&lt;</span><span class="n">Activity</span><span class="o">&gt;&gt;();</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>  
+</span><span class='line'>  <span class="cm">/**</span>
+</span><span class='line'><span class="cm">  * 添加activity，在activity的onCreate中</span>
+</span><span class='line'><span class="cm">  * @param activity</span>
+</span><span class='line'><span class="cm">  */</span>
+</span><span class='line'>  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">addActivity</span><span class="o">(</span><span class="kd">final</span> <span class="n">BaseActivity</span> <span class="n">activity</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>      <span class="n">listCurrent</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">activity</span><span class="o">);</span>
+</span><span class='line'>      <span class="kd">synchronized</span> <span class="o">(</span><span class="n">listLeak</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>          <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">j</span> <span class="o">=</span> <span class="n">listLeak</span><span class="o">.</span><span class="na">size</span><span class="o">()</span> <span class="o">-</span> <span class="mi">1</span><span class="o">;</span> <span class="n">j</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">j</span><span class="o">--)</span> <span class="o">{</span>
+</span><span class='line'>              <span class="n">WeakReference</span><span class="o">&lt;</span><span class="n">Activity</span><span class="o">&gt;</span> <span class="n">wr</span> <span class="o">=</span> <span class="n">listLeak</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">j</span><span class="o">);</span>
+</span><span class='line'>              <span class="k">if</span> <span class="o">(</span><span class="n">wr</span> <span class="o">==</span> <span class="kc">null</span> <span class="o">||</span> <span class="n">wr</span><span class="o">.</span><span class="na">get</span><span class="o">()</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>                  <span class="n">listLeak</span><span class="o">.</span><span class="na">remove</span><span class="o">(</span><span class="n">j</span><span class="o">);</span>
+</span><span class='line'>              <span class="o">}</span>
+</span><span class='line'>          <span class="o">}</span>
+</span><span class='line'>          <span class="n">listLeak</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="k">new</span> <span class="n">WeakReference</span><span class="o">&lt;</span><span class="n">Activity</span><span class="o">&gt;(</span><span class="n">activity</span><span class="o">));</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="cm">/**</span>
+</span><span class='line'><span class="cm">  * activity的destory中删除</span>
+</span><span class='line'><span class="cm">  * @param activity</span>
+</span><span class='line'><span class="cm">  */</span>
+</span><span class='line'>  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">removeActivity</span><span class="o">(</span><span class="kd">final</span> <span class="n">BaseActivity</span> <span class="n">activity</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>      <span class="n">listCurrent</span><span class="o">.</span><span class="na">remove</span><span class="o">(</span><span class="n">activity</span><span class="o">);</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>全局异常处理打印activity信息</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="nd">@Override</span>
+</span><span class='line'>  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">uncaughtException</span><span class="o">(</span><span class="kd">final</span> <span class="n">Thread</span> <span class="n">thread</span><span class="o">,</span> <span class="kd">final</span> <span class="n">Throwable</span> <span class="n">ex</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>      <span class="k">if</span> <span class="o">(</span><span class="n">ex</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>          <span class="k">return</span><span class="o">;</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="k">if</span> <span class="o">(</span><span class="n">lastThrowable</span> <span class="o">==</span> <span class="n">ex</span> <span class="o">||</span> <span class="n">ex</span><span class="o">.</span><span class="na">getCause</span><span class="o">()</span> <span class="o">!=</span> <span class="kc">null</span>
+</span><span class='line'>              <span class="o">&amp;&amp;</span> <span class="n">lastThrowable</span> <span class="o">==</span> <span class="n">ex</span><span class="o">.</span><span class="na">getCause</span><span class="o">())</span> <span class="o">{</span>
+</span><span class='line'>          <span class="n">android</span><span class="o">.</span><span class="na">os</span><span class="o">.</span><span class="na">Process</span><span class="o">.</span><span class="na">killProcess</span><span class="o">(</span><span class="n">android</span><span class="o">.</span><span class="na">os</span><span class="o">.</span><span class="na">Process</span><span class="o">.</span><span class="na">myPid</span><span class="o">());</span>
+</span><span class='line'>          <span class="n">System</span><span class="o">.</span><span class="na">exit</span><span class="o">(</span><span class="mi">1</span><span class="o">);</span>
+</span><span class='line'>          <span class="k">return</span><span class="o">;</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="n">StringBuilder</span> <span class="n">sbActivities</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">StringBuilder</span><span class="o">();</span>
+</span><span class='line'>      <span class="n">sbActivities</span><span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">&quot;activities: &quot;</span><span class="o">);</span>
+</span><span class='line'>      <span class="n">StringBuilder</span> <span class="n">sbLeakActivities</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">StringBuilder</span><span class="o">();</span>
+</span><span class='line'>      <span class="n">sbLeakActivities</span><span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">&quot;leak activities: &quot;</span><span class="o">);</span>
+</span><span class='line'>      <span class="n">ArrayList</span><span class="o">&lt;</span><span class="n">WeakReference</span><span class="o">&lt;</span><span class="n">Activity</span><span class="o">&gt;&gt;</span> <span class="n">list</span> <span class="o">=</span> <span class="n">BaseApplication</span><span class="o">.</span><span class="na">instance</span><span class="o">.</span><span class="na">listLeak</span><span class="o">;</span>
+</span><span class='line'>      <span class="k">for</span> <span class="o">(</span><span class="n">WeakReference</span><span class="o">&lt;</span><span class="n">Activity</span><span class="o">&gt;</span> <span class="n">wr</span> <span class="o">:</span> <span class="n">list</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>          <span class="k">if</span> <span class="o">(</span><span class="n">wr</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>              <span class="k">continue</span><span class="o">;</span>
+</span><span class='line'>          <span class="o">}</span>
+</span><span class='line'>          <span class="n">Activity</span> <span class="n">activity</span> <span class="o">=</span> <span class="n">wr</span><span class="o">.</span><span class="na">get</span><span class="o">();</span>
+</span><span class='line'>          <span class="k">if</span> <span class="o">(</span><span class="n">activity</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>              <span class="k">continue</span><span class="o">;</span>
+</span><span class='line'>          <span class="o">}</span>
+</span><span class='line'>          <span class="n">sbActivities</span><span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="n">activity</span><span class="o">.</span><span class="na">getClass</span><span class="o">().</span><span class="na">getSimpleName</span><span class="o">()).</span><span class="na">append</span><span class="o">(</span><span class="s">&quot;, &quot;</span><span class="o">);</span>
+</span><span class='line'>          <span class="k">if</span> <span class="o">(!</span><span class="n">BaseApplication</span><span class="o">.</span><span class="na">instance</span><span class="o">.</span><span class="na">listCurrent</span><span class="o">.</span><span class="na">contains</span><span class="o">(</span><span class="n">activity</span><span class="o">))</span> <span class="o">{</span>
+</span><span class='line'>              <span class="n">sbLeakActivities</span><span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="n">activity</span><span class="o">.</span><span class="na">getClass</span><span class="o">().</span><span class="na">getSimpleName</span><span class="o">()).</span><span class="na">append</span><span class="o">(</span><span class="s">&quot;, &quot;</span><span class="o">);</span>
+</span><span class='line'>          <span class="o">}</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>      <span class="n">sbActivities</span><span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">&quot;\n&quot;</span><span class="o">).</span><span class="na">append</span><span class="o">(</span><span class="n">sbLeakActivities</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="n">Throwable</span> <span class="n">myThrowable</span> <span class="o">=</span> <span class="n">ex</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="k">if</span> <span class="o">(</span><span class="n">ex</span> <span class="k">instanceof</span> <span class="n">Exception</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>          <span class="n">myThrowable</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">Exception</span><span class="o">(</span><span class="n">sbActivities</span><span class="o">.</span><span class="na">toString</span><span class="o">(),</span> <span class="n">ex</span><span class="o">);</span>
+</span><span class='line'>      <span class="o">}</span> <span class="k">else</span> <span class="nf">if</span> <span class="o">(</span><span class="n">ex</span> <span class="k">instanceof</span> <span class="n">Error</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>          <span class="n">myThrowable</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">Error</span><span class="o">(</span><span class="n">sbActivities</span><span class="o">.</span><span class="na">toString</span><span class="o">(),</span> <span class="n">ex</span><span class="o">);</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="n">lastThrowable</span> <span class="o">=</span> <span class="n">myThrowable</span><span class="o">;</span>
+</span><span class='line'>      
+</span><span class='line'>      <span class="c1">//交还给系统处理，我们只是在wrapperThrowable附加信息</span>
+</span><span class='line'>      <span class="n">mSystemDefaultHandler</span><span class="o">.</span><span class="na">uncaughtException</span><span class="o">(</span><span class="n">thread</span><span class="o">,</span> <span class="n">myThrowable</span><span class="o">);</span>
+</span><span class='line'>      <span class="k">return</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>  
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>定义BaseActivity</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">BaseActivity</span> <span class="kd">extends</span> <span class="n">Activity</span><span class="o">{</span>
+</span><span class='line'>  
+</span><span class='line'>  <span class="nd">@Override</span>
+</span><span class='line'>  <span class="kd">protected</span> <span class="kt">void</span> <span class="nf">onCreate</span><span class="o">(</span><span class="n">Bundle</span> <span class="n">savedInstanceState</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>      <span class="kd">super</span><span class="o">.</span><span class="na">onCreate</span><span class="o">(</span><span class="n">savedInstanceState</span><span class="o">);</span>
+</span><span class='line'>      <span class="n">BaseApplication</span><span class="o">.</span><span class="na">instance</span><span class="o">.</span><span class="na">addActivity</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>
+</span><span class='line'>      <span class="n">MyCrashHandler</span><span class="o">.</span><span class="na">getInstance</span><span class="o">().</span><span class="na">setDefaultUncaughtExceptionHandler</span><span class="o">();</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>  
+</span><span class='line'>  <span class="nd">@Override</span>
+</span><span class='line'>  <span class="kd">protected</span> <span class="kt">void</span> <span class="nf">onDestroy</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="kd">super</span><span class="o">.</span><span class="na">onDestroy</span><span class="o">();</span>
+</span><span class='line'>      <span class="n">BaseApplication</span><span class="o">.</span><span class="na">instance</span><span class="o">.</span><span class="na">removeActivity</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>MainActivity中跳转到LeakAtivity</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">MainActivity</span> <span class="kd">extends</span> <span class="n">BaseActivity</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nd">@Override</span>
+</span><span class='line'>  <span class="kd">protected</span> <span class="kt">void</span> <span class="nf">onCreate</span><span class="o">(</span><span class="n">Bundle</span> <span class="n">savedInstanceState</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>      <span class="kd">super</span><span class="o">.</span><span class="na">onCreate</span><span class="o">(</span><span class="n">savedInstanceState</span><span class="o">);</span>
+</span><span class='line'>      <span class="n">setContentView</span><span class="o">(</span><span class="n">R</span><span class="o">.</span><span class="na">layout</span><span class="o">.</span><span class="na">activity_main</span><span class="o">);</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>  
+</span><span class='line'>  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">gotoLeakActivity</span><span class="o">(</span><span class="n">View</span> <span class="n">view</span><span class="o">){</span>
+</span><span class='line'>      <span class="n">Intent</span> <span class="n">intent</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">Intent</span><span class="o">();</span>
+</span><span class='line'>      <span class="n">intent</span><span class="o">.</span><span class="na">setClass</span><span class="o">(</span><span class="k">this</span><span class="o">,</span> <span class="n">LeakActivity</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+</span><span class='line'>      <span class="n">startActivity</span><span class="o">(</span><span class="n">intent</span><span class="o">);</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>LeakActivity模拟内存泄漏</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">LeakActivity</span> <span class="kd">extends</span> <span class="n">BaseActivity</span><span class="o">{</span>
+</span><span class='line'>  
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span>  <span class="kt">int</span> <span class="n">MSG</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
+</span><span class='line'>  <span class="kd">private</span> <span class="n">Handler</span> <span class="n">handler</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">MyHandler</span><span class="o">();</span>
+</span><span class='line'>  <span class="n">ArrayList</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">list</span> <span class="o">=</span> <span class="k">new</span> <span class="n">ArrayList</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;();</span>
+</span><span class='line'>  <span class="nd">@Override</span>
+</span><span class='line'>  <span class="kd">protected</span> <span class="kt">void</span> <span class="nf">onCreate</span><span class="o">(</span><span class="n">Bundle</span> <span class="n">savedInstanceState</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>      <span class="kd">super</span><span class="o">.</span><span class="na">onCreate</span><span class="o">(</span><span class="n">savedInstanceState</span><span class="o">);</span>
+</span><span class='line'>      <span class="n">setContentView</span><span class="o">(</span><span class="n">R</span><span class="o">.</span><span class="na">layout</span><span class="o">.</span><span class="na">activity_leak</span><span class="o">);</span>
+</span><span class='line'>      
+</span><span class='line'>      <span class="n">handler</span><span class="o">.</span><span class="na">sendEmptyMessage</span><span class="o">(</span><span class="n">MSG</span><span class="o">);</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>  
+</span><span class='line'>  <span class="cm">/**</span>
+</span><span class='line'><span class="cm">      * 模拟内存泄漏</span>
+</span><span class='line'><span class="cm">      * @author pangff</span>
+</span><span class='line'><span class="cm">      */</span>
+</span><span class='line'>  <span class="kd">private</span> <span class="kd">class</span> <span class="nc">MyHandler</span> <span class="kd">extends</span> <span class="n">Handler</span> <span class="o">{</span>
+</span><span class='line'>      <span class="nd">@Override</span>
+</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">handleMessage</span><span class="o">(</span><span class="kd">final</span> <span class="n">Message</span> <span class="n">msg</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>        <span class="kd">super</span><span class="o">.</span><span class="na">handleMessage</span><span class="o">(</span><span class="n">msg</span><span class="o">);</span>
+</span><span class='line'>        <span class="k">if</span><span class="o">(</span><span class="n">msg</span><span class="o">.</span><span class="na">what</span> <span class="o">==</span> <span class="n">MSG</span><span class="o">){</span>
+</span><span class='line'>                  <span class="k">for</span><span class="o">(</span><span class="kt">int</span> <span class="n">i</span><span class="o">=</span><span class="mi">0</span><span class="o">;</span><span class="n">i</span><span class="o">&lt;</span><span class="mi">10000</span><span class="o">;</span><span class="n">i</span><span class="o">++){</span>
+</span><span class='line'>                      <span class="n">list</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">String</span><span class="o">.</span><span class="na">valueOf</span><span class="o">(</span><span class="n">i</span><span class="o">));</span><span class="c1">//为了尽快的造成OutOfMemory</span>
+</span><span class='line'>                  <span class="o">}</span>
+</span><span class='line'>              <span class="n">handler</span><span class="o">.</span><span class="na">sendEmptyMessageDelayed</span><span class="o">(</span><span class="n">MSG</span><span class="o">,</span> <span class="mi">1000</span><span class="o">);</span><span class="c1">//循环发送消息</span>
+</span><span class='line'>        <span class="o">}</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>  
+</span><span class='line'>  <span class="nd">@Override</span>
+</span><span class='line'>  <span class="kd">protected</span> <span class="kt">void</span> <span class="nf">onDestroy</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="kd">super</span><span class="o">.</span><span class="na">onDestroy</span><span class="o">();</span>
+</span><span class='line'>      <span class="c1">//handler.removeMessages(MSG);</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>我们运行程序从MainActivity点击leak activity到leak activity然后后退退出leak activity再进入，多次重复几次后会出现如图异常</p>
+
+<p><img src="http://www.pffair.com/images/38.png" alt="" /></p>
+
+<p>根据日志我们可以看到我们点击了5次leak acitivity进入LeakActivity并且都退出了。日志中leak activitys：应该是没有的然而日志中确出现了5次，很显然我们的LeakActivity存在内存泄漏。</p>
+
+<p>下面我们来找到LeakActivity中泄漏问题根源</p>
+
+<p>进入eclipse的ddms模式，如图</p>
+
+<p><img src="http://www.pffair.com/images/39.png" alt="" /></p>
+
+<p>选中我们的项目进程点击DUMP HPROF file按钮，如图</p>
+
+<p><img src="http://www.pffair.com/images/40.png" alt="" /></p>
+
+<p>等待生成hprof文件并用mat打开，打开后选择leak report，如图</p>
+
+<p><img src="http://www.pffair.com/images/41.png" alt="" /></p>
+
+<p>然后进入leak report，如图</p>
+
+<p><img src="http://www.pffair.com/images/42.png" alt="" /></p>
+
+<p>我们不看这个报告，因为我们已经知道了具体位置，打开Dominaor视图，如图</p>
+
+<p><img src="http://www.pffair.com/images/43.png" alt="" /></p>
+
+<p>然后输入我们要找的LeakActivity进行过滤，发现果然有好几个LeakActivity实例（按正常来说我们退出了应该都销毁不存在才对，存在说明内存泄漏了）如图</p>
+
+<p><img src="http://www.pffair.com/images/44.png" alt="" /></p>
+
+<p>然后我们选中一个，到incoming refrence这样清晰看到LeakActivity持有的内容，如图</p>
+
+<p><img src="http://www.pffair.com/images/45.png" alt="" /></p>
+
+<p>然后我们再选择Path TO GC Roots（如果存在GC Roots说明没有释放）来找到它未被回收的原因，如图</p>
+
+<p><img src="http://www.pffair.com/images/46.png" alt="" /></p>
+
+<p>结果，如图</p>
+
+<p><img src="http://www.pffair.com/images/47.png" alt="" /></p>
+
+<p>根据上面的图可以看到原因出在我们的内部类MyHandler上，循环发送了消息到主线程的消息队列。handler一直未被释放而它的外部类LeakActivity也不能被释放(默认的内部类会持有外部类的引用)。这下我们就知道该怎么改了吧.最简单方法，在LeakActivity中的onDestory中在消息队列中删除这个MSG消息，如下代码</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="nd">@Override</span>
+</span><span class='line'>  <span class="kd">protected</span> <span class="kt">void</span> <span class="nf">onDestroy</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="kd">super</span><span class="o">.</span><span class="na">onDestroy</span><span class="o">();</span>
+</span><span class='line'>      <span class="n">handler</span><span class="o">.</span><span class="na">removeMessages</span><span class="o">(</span><span class="n">MSG</span><span class="o">);</span>
+</span><span class='line'>  <span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>我们再次测试会发现不会出现OutOfMemory了。然后使用MAT重复检测步骤LeakActivity的实例一个也不见了，内存问题解决。</p>
+
+<p>测试代码地址</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="nl">https:</span><span class="c1">//github.com/pangff/MemoryLeakAnalyzer</span>
+</span></code></pre></td></tr></table></div></figure>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[混淆后代码异常处理]]></title>
+    <link href="http://www.pffair.com/blog/2015/03/10/hun-yao-hou-dai-ma-yi-chang-chu-li/"/>
+    <updated>2015-03-10T14:26:54+08:00</updated>
+    <id>http://www.pffair.com/blog/2015/03/10/hun-yao-hou-dai-ma-yi-chang-chu-li</id>
+    <content type="html"><![CDATA[<p>release版本的apk经常会通过一些三方统计平台（比如友盟、flurry等等）进行错误收集。然而由于release版本一般要通过混淆，混淆后的异常堆栈很难读取。该如何处理呢？</p>
+
+<!--more-->
+
+
+<h4>方法一 保留mapping文件使用proguardgui转换查看</h4>
+
+<p>android开发人员都知道，使用ant打包之后会生成一个mapping.txt的混淆映射文件。然后使用android sdk目录下的proguardgui可视化转换工具进行reTrace转换。可以将不容易读取的异常堆栈转换成好理解定位代码的信息</p>
+
+<p>proguardgui所在位置</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>&lt;android-sdk-home&gt;/tools/proguard/bin/proguardgui.sh 
+</span><span class='line'>(windows的话是proguardgui.bat)
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>打开图形界面，如图</p>
+
+<p><img src="http://www.pffair.com/images/36.png" alt="" /></p>
+
+<p>使用方法：</p>
+
+<ul>
+<li>选择ReTace</li>
+<li>在mapping file区域选择打包时产生的mapping文件</li>
+<li>在Obfuscated stack trace区域粘贴异常堆栈</li>
+<li>点击右下角的ReTrace！按钮</li>
+<li>在De-obfuscated stack trace 区域可以看到转换后的好理解的异常信息</li>
+</ul>
+
+
+<p>转换后的效果，如图</p>
+
+<p><img src="http://www.pffair.com/images/37.png" alt="" /></p>
+
+<h4>方法二 直接读mapping文件</h4>
+
+<p>直接读取mapping有一定难度，需要搞懂一些规则：</p>
+
+<p>mapping文件中$的含义：</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$是内部类的意思，比如 :
+</span><span class='line'>  com.pffair.Test$MainTest 指的是Test类中的内部类MainTest
+</span><span class='line'>  com.pffari.Test$1 指Test类中的第一个匿名内部类 其中1代表第几个，按前后顺序
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>mapping文件中access$xxx的含义：</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>access$xxx指内部类中调用的外部类方法或对象 ，例如:
+</span><span class='line'>  java.util.List access$100(com.pffair.Test) 
+</span><span class='line'>  指在Test类的某个内部类中第1个位置引用了外部类Test的私有成员（变量或方法）
+</span><span class='line'>  其中100中后两位代表类型，00表示对象或者函数，02代表基本数据类型。
+</span><span class='line'>  后两位前面的数字表示出现的顺序从0开始
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>搞明白了这两点，mapping文件基本就能理解个大概了。当然其中还有比较复杂的内部类嵌套等问题，但是按上面的两点嵌套读取就可以了</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[jenkins服务器打包]]></title>
+    <link href="http://www.pffair.com/blog/2015/01/30/jenkinsfu-wu-qi-da-bao/"/>
+    <updated>2015-01-30T14:49:51+08:00</updated>
+    <id>http://www.pffair.com/blog/2015/01/30/jenkinsfu-wu-qi-da-bao</id>
+    <content type="html"><![CDATA[<p>android项目中要批量多渠道打包，所以使用了ant脚本。但是因为每个人本地环境不同、操作系统不同经常要修改打包文件，而且每次打包都要占用一定时间。为了减少重复工作方便任何人无障碍打包，就要将打包环境部署到服务器，而且使用jenkins持续集成更加方便。下面简单说下部署步骤。</p>
+
+<!--more-->
+
+
+<p>1、安装jenkins（以linux上安装为例）</p>
+
+<pre><code>sudo apt-get install jenkins
+/**当然你也可以下载jenkins.war在web服务器下部署**/
+</code></pre>
+
+<p>2、启动服务(默认是8080端口，可以通过修改配置文件修改端口)</p>
+
+<pre><code>http://server_ip:8080
+/**如果每启动看下是不是端口占用**/
+
+/**如果没有占用，手动启一下**/
+service jenkins start
+</code></pre>
+
+<p>3、启动后页面(我已经创建了一个test项目)，出现jenkins页面说明成功了</p>
+
+<p><img src="http://www.pffair.com/images/31.png" alt="" /></p>
+
+<p>4、新建项目</p>
+
+<p><img src="http://www.pffair.com/images/32.png" alt="" /></p>
+
+<p>5、项目地址配置(我这里用的是git，如果是svn的话那么就选择subversion选项)</p>
+
+<p><img src="http://www.pffair.com/images/33.png" alt="" /></p>
+
+<p>6、打包的ant target 以及文件(默认是项目根目录的buildx.xml)</p>
+
+<p><img src="http://www.pffair.com/images/34.png" alt="" /></p>
+
+<p>7、保存配置，立即构建（忽然发现服务器还没有android打包环境）</p>
+
+<p><img src="http://www.pffair.com/images/35.png" alt="" /></p>
+
+<p>8、服务器安装ant、android打包环境。改写build.xml文件配置适应服务器环境</p>
+
+<p>9、重新构建，打包完成</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[octopress 常用命令]]></title>
+    <link href="http://www.pffair.com/blog/2015/01/30/octopress-chang-yong-ming-ling/"/>
+    <updated>2015-01-30T14:02:01+08:00</updated>
+    <id>http://www.pffair.com/blog/2015/01/30/octopress-chang-yong-ming-ling</id>
+    <content type="html"><![CDATA[<p>好久不用octopress了，再用的时候发现命令都忘了，这里纪录下常用的命令，备忘。</p>
+
+<!--more-->
+
+
+<p>1、发布文章</p>
+
+<pre><code>rake new_post["title"]
+</code></pre>
+
+<p>2、添加页面</p>
+
+<pre><code>rake new_page["about"]
+</code></pre>
+
+<p>3、生成/发布</p>
+
+<pre><code>rake generate
+rake deploy
+</code></pre>
+
+<p>3、本地预览</p>
+
+<pre><code>rake preview
+</code></pre>
+
+<p>3、语法</p>
+
+<pre><code>http://wowubuntu.com/markdown/
+</code></pre>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[趟Android L ]]></title>
+    <link href="http://www.pffair.com/blog/2014/07/24/tang-android-l-preview/"/>
+    <updated>2014-07-24T18:30:28+08:00</updated>
+    <id>http://www.pffair.com/blog/2014/07/24/tang-android-l-preview</id>
+    <content type="html"><![CDATA[<p>android L 发布一段时间了，抽时间趟了一下，做一下总结。</p>
+
+<!--more-->
+
+
+<ul>
+<li>环境变化，最大变化就是虚拟机从Dalvik变为了ART(在4.3已经引入，但是androidL已经作为默认运行环境)</li>
+<li>ART采用预编译（接收dex文件输入，输出目标机器可执行文件），速度当然要比Dalvik快，同时在垃圾回收，和调试方面都有提升</li>
+<li>接下来是通知API上的改进
+为了用户隐私去掉了ActivityManager.getRecentTasks()，ActivityManager.getAppTasks()只能得到本应用信息</li>
+<li>界面上的变化,采用了Material design</li>
+<li>添加了锁屏通知Lockscreen notifications</li>
+<li>WebView 升级到 Chromium M36，可以支持（ WebAudio, WebGL, and WebRTC）</li>
+<li>绘图的变化。支持OpenGL ES 3.1</li>
+<li>媒体方面变化。Camera API变化 AudioTrack API变化 MediaController变化</li>
+<li>存储方面的变化</li>
+<li>网络传输变化</li>
+<li>蓝牙广播</li>
+<li>NFC提升</li>
+<li>电池效率</li>
+<li>电池使用测量的开发工具</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Canvas将文本画到指定位置]]></title>
+    <link href="http://www.pffair.com/blog/2014/07/11/textviewjiang-wen-ben-hua-dao-zhi-ding-wei-zhi/"/>
+    <updated>2014-07-11T19:07:06+08:00</updated>
+    <id>http://www.pffair.com/blog/2014/07/11/textviewjiang-wen-ben-hua-dao-zhi-ding-wei-zhi</id>
+    <content type="html"><![CDATA[<p>经常会遇到使用Canvas绘制文字的情况，但是我们会发现使用canvas.drawText(&ldquo;string&rdquo;,x,y,paint)的时候画出的效果不是想象中按文字左上角坐标来的。那么文字位置究竟是怎么样的呢？</p>
+
+<!--more-->
+
+
+<p>x坐标和gravity有关，这里不做详细讨论</p>
+
+<p>来看高度我们直接盗个图来看下</p>
+
+<p><img src="http://www.pffair.com/images/30.png" alt="本图来自csdn博客http://blog.csdn.net/wen0006/article/details/5712001" /></p>
+
+<p>根据图片我可以看到有几个基准线</p>
+
+<ul>
+<li>baseLine:我们可以理解为y坐标轴的0点,横轴，（它其实是drawText中的y)</li>
+<li>paint.getFontMetrics().bottom: bottom到biseline的距离</li>
+<li>paint.getFontMetrics().top: top到biseline的距离(在横纵上放所以为负值)</li>
+<li>paint.getFontMetrics().ascent: ascent到biseline的距离(在横纵上放所以为负值)</li>
+<li>paint.getFontMetrics().descent: descent到biseline的距离(在横纵上放所以为负值)</li>
+</ul>
+
+
+<p>接下来我们可以模拟一个场景：
+要把一个文本绘制到一个已知矩形的中心centerY，那么我们改如何计算文本的baseline 呢？</p>
+
+<p>根据简单几何知识可得</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kt">int</span> <span class="n">baseline</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="o">(</span><span class="n">rectF</span><span class="o">.</span><span class="na">centerY</span><span class="o">()+(</span><span class="n">paint</span><span class="o">.</span><span class="na">getFontMetrics</span><span class="o">().</span><span class="na">bottom</span><span class="o">-</span><span class="n">paint</span><span class="o">.</span><span class="na">getFontMetrics</span><span class="o">().</span><span class="na">top</span><span class="o">)/</span><span class="mi">2</span><span class="o">-</span><span class="n">paint</span><span class="o">.</span><span class="na">getFontMetrics</span><span class="o">().</span><span class="na">bottom</span><span class="o">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+]]></content>
+  </entry>
+  
+</feed>

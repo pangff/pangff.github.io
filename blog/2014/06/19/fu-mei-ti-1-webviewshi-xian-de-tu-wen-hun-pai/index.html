@@ -1,0 +1,571 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>富媒体1－WebView实现的图文混排 - Pangff's Blog</title>
+	<meta name="author" content="pangff">
+
+	
+	<meta name="description" content="富媒体1－WebView实现的图文混排 android设备繁多分辨率各种各样，对于app的屏幕适配本身已经是个很困难的问题，而对于不同设备的图文混排实现就更加困难了。因为传统的本地应用方式做图文混排需要对原始资源进行拆分排版在屏幕上定位，如果定制设备的话精确定位到固定坐标就可以了， &hellip;">
+	
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="baidu-site-verification" content="4uVEsGeeHG" />
+  <meta name="google-site-verification" content="RF1uUMXanCzUMdaFqAcD1EUdurAKJag8L8CqWylzCb0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="Pangff's Blog" type="application/atom+xml">
+	
+	<link rel="canonical" href="http://www.pffair.com/blog/2014/06/19/fu-mei-ti-1-webviewshi-xian-de-tu-wen-hun-pai/">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700' rel='stylesheet' type='text/css'>
+	
+</head>
+
+
+<body>
+	<div class="container">
+		<div class="left-col">
+			<div class="intrude-less">
+			<header id="header" class="inner"><div class="profilepic">	
+	<script src="/javascripts/md5.js"></script>
+	<script type="text/javascript">
+		document.write("<img src='/images/avatar.jpg' alt='Profile Picture' style='width: 160px;' />");
+	</script>
+</div>
+<h1><a href="/">Pangff's Blog</a></h1>
+<p class="subtitle">stay foolish stay hungry.</p>
+<nav id="main-nav">
+<form action="http://www.pffair.com/search" method="get">
+    <input class="search" name="query" type="text" placeholder="Search..."/>
+</form>
+
+<ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+	<li><a href="/about">About</a></li>
+</ul>
+</nav>
+<nav id="sub-nav">
+	<div class="social">
+		
+		
+		
+		
+		
+		<a class="github" href="https://github.com/pangff" title="GitHub">GitHub</a>
+		
+		
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</nav>
+<gcse:search></gcse:search>
+<section>
+  <h1></h1>
+  <ul id="categories">
+    <li class='category'><a href='/blog/categories/3d/'>3d (3)</a></li>
+<li class='category'><a href='/blog/categories/android/'>android (26)</a></li>
+<li class='category'><a href='/blog/categories/docker/'>docker (6)</a></li>
+<li class='category'><a href='/blog/categories/filechooser/'>filechooser (1)</a></li>
+<li class='category'><a href='/blog/categories/js/'>js (1)</a></li>
+<li class='category'><a href='/blog/categories/pathview/'>pathview (1)</a></li>
+<li class='category'><a href='/blog/categories/pdf/'>pdf (1)</a></li>
+<li class='category'><a href='/blog/categories/react/'>react (1)</a></li>
+<li class='category'><a href='/blog/categories/redux/'>redux (1)</a></li>
+<li class='category'><a href='/blog/categories/svg/'>svg (2)</a></li>
+<li class='category'><a href='/blog/categories/tomcat/'>tomcat (1)</a></li>
+<li class='category'><a href='/blog/categories/turn/'>turn (1)</a></li>
+<li class='category'><a href='/blog/categories/vectordrawable/'>vectordrawable (1)</a></li>
+<li class='category'><a href='/blog/categories/webrtc/'>webrtc (1)</a></li>
+<li class='category'><a href='/blog/categories/webview/'>webview (1)</a></li>
+<li class='category'><a href='/blog/categories/bei-wang/'>备忘 (3)</a></li>
+<li class='category'><a href='/blog/categories/xing-neng-you-hua/'>性能优化 (2)</a></li>
+<li class='category'><a href='/blog/categories/fu-wu-duan/'>服务端 (1)</a></li>
+<li class='category'><a href='/blog/categories/shi-liang-tu/'>矢量图 (1)</a></li>
+
+  </ul>
+</section>
+
+
+</header>				
+			</div>
+		</div>	
+		<div class="mid-col">
+			
+				
+			
+			<div class="mid-col-container">
+				<div id="content" class="inner"><article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+	<h1 class="title" itemprop="name">富媒体1－WebView实现的图文混排</h1>
+	<div class="entry-content" itemprop="articleBody"><p>android设备繁多分辨率各种各样，对于app的屏幕适配本身已经是个很困难的问题，而对于不同设备的图文混排实现就更加困难了。因为传统的本地应用方式做图文混排需要对原始资源进行拆分排版在屏幕上定位，如果定制设备的话精确定位到固定坐标就可以了，但是要做多设备就不得不再重新计算排版定位了，每台设备都要重新计算这无疑将会是一个巨大的工作量。所以，我们考虑采用WebView加载html页面的方式来实现图文混排。因为html+css本身就可以做到图文混排，而且前期排版的工作量不会很大，通过css做多设备适配也相对容易。</p>
+
+<!--more-->
+
+
+<p>实现效果</p>
+
+<ul>
+<li>采用css3分栏模式，一栏为一屏；</li>
+<li>宽高适应屏幕大小；</li>
+<li>横向滑动（尚未做翻页控制）</li>
+</ul>
+
+
+<p>如图</p>
+
+<p><img src="http://www.pffair.com/images/19.png" alt="" />
+<img src="http://www.pffair.com/images/20.png" alt="" /></p>
+
+<p>实现思路：</p>
+
+<ul>
+<li>通过webview加载简单混排后的html，通过css使得可以在设备上正常显示并体验良好。</li>
+<li>通过第一步确定固定的html页面格式，也就是模版</li>
+<li>服务器端通过上传原始数据，生成客户端需要的指定模版数据</li>
+<li>客户端动态加载服务器端的指定模板数据</li>
+</ul>
+
+
+<p>具体实现：</p>
+
+<p>1、使用WebView加载一个简单的hmtl页面
+在assets目录下创建book.html文件，引入jquery。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='html'><span class='line'><span class="nt">&lt;html&gt;</span>
+</span><span class='line'><span class="nt">&lt;head&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;title&gt;</span>天蝎座<span class="nt">&lt;/title&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;meta</span> <span class="na">charset=</span><span class="s">&quot;utf-8&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;meta</span> <span class="na">name=</span><span class="s">&quot;viewport&quot;</span> <span class="na">content=</span><span class="s">&quot;initial-scale=1.0, maximum-scale=1.0,width=device-width,user-scalable=no&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;script </span><span class="na">src=</span><span class="s">&quot;jquery-1.9.1.min.js&quot;</span><span class="nt">&gt;&lt;/script&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;link</span> <span class="na">href=</span><span class="s">&quot;book.css&quot;</span> <span class="na">rel=</span><span class="s">&quot;stylesheet&quot;</span> <span class="na">type=</span><span class="s">&quot;text/css&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'><span class="nt">&lt;/head&gt;</span>
+</span><span class='line'><span class="nt">&lt;body</span> <span class="nt">&gt;</span>
+</span><span class='line'><span class="nt">&lt;div</span> <span class="na">id=</span><span class="s">&quot;content&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>测试
+</span><span class='line'><span class="nt">&lt;/div&gt;</span>
+</span><span class='line'><span class="nt">&lt;/body&gt;</span>
+</span><span class='line'><span class="nt">&lt;/html&gt;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>WebView加载book.html</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="n">webView</span><span class="o">.</span><span class="na">loadUrl</span><span class="o">(</span><span class="s">&quot;file:///android_asset/book.html&quot;</span><span class="o">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>2、编写html实现图文混排，用css3分栏并控制内容适应屏幕宽高
+填写html内容</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+</pre></td><td class='code'><pre><code class='html'><span class='line'><span class="nt">&lt;html&gt;</span>
+</span><span class='line'><span class="nt">&lt;head&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;title&gt;</span>天蝎座<span class="nt">&lt;/title&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;meta</span> <span class="na">charset=</span><span class="s">&quot;utf-8&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;meta</span> <span class="na">name=</span><span class="s">&quot;viewport&quot;</span> <span class="na">content=</span><span class="s">&quot;initial-scale=1.0, maximum-scale=1.0,width=device-width,user-scalable=no&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;script </span><span class="na">src=</span><span class="s">&quot;jquery-1.9.1.min.js&quot;</span><span class="nt">&gt;&lt;/script&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;link</span> <span class="na">href=</span><span class="s">&quot;book.css&quot;</span> <span class="na">rel=</span><span class="s">&quot;stylesheet&quot;</span> <span class="na">type=</span><span class="s">&quot;text/css&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'><span class="nt">&lt;/head&gt;</span>
+</span><span class='line'><span class="nt">&lt;body</span> <span class="nt">&gt;</span>
+</span><span class='line'><span class="nt">&lt;div</span> <span class="na">id=</span><span class="s">&quot;content&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'><span class="nt">&lt;article</span> <span class="na">id=</span><span class="s">&quot;article&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>  <span class="nt">&lt;header&gt;</span>天蝎座<span class="nt">&lt;/header&gt;</span>
+</span><span class='line'>  <span class="nt">&lt;img</span> <span class="na">style=</span><span class="s">&quot;float:right&quot;</span> <span class="na">src=</span><span class="s">&quot;images/1.jpg&quot;</span> <span class="nt">/&gt;</span>
+</span><span class='line'>  <span class="nt">&lt;p</span> <span class="na">stye=</span><span class="s">&quot;float:left;text-indent:2em;&quot;</span><span class="nt">&gt;</span>天蝎座，黄道十二宫之一。位于南半球，在西面的天秤座与东面的人马座之间，是一个接近银河中心的大星座。
+</span><span class='line'>      阳历10月24日～11月22日（小雪）期间出生的人为天蝎座。Scorpio是天蝎座的英文也是希腊文，十二星座只有三个星座英文和希腊文一样，天蝎座即是其中之一。
+</span><span class='line'>  <span class="nt">&lt;/p&gt;</span>
+</span><span class='line'>  <span class="nt">&lt;header&gt;</span>历史起源<span class="nt">&lt;/header&gt;</span>
+</span><span class='line'>  <span class="nt">&lt;p&gt;</span>黄道十二星座中最显著的星座。中心位置：赤经16时40分，赤 天蝎
+</span><span class='line'>      纬－36度。夏季出现在南方天空，蝎尾指向东南，在人马、天秤等星座之间。α星（心宿二）是红色的1等星。疏散星团M6和M7肉眼均可见。座内有亮于4等的星22颗。
+</span><span class='line'>  <span class="nt">&lt;/p&gt;</span>
+</span><span class='line'>  <span class="nt">&lt;p&gt;</span>天蝎宫 第八宫。黄经从210度到240度。每年10月23日前后太阳到这一宫。那时的节气是霜降。 属性 ：水相星座
+</span><span class='line'>      守护星：冥王星，火星 宫位 ：第八宫 象征 ：蝎子 阴阳性 ：阴性 三方态 ：固定宫 守护神
+</span><span class='line'>      ：希腊┈哈迪斯（Hades），罗马┈普鲁特（Pluto）<span class="nt">&lt;/p&gt;</span>
+</span><span class='line'>  <span class="nt">&lt;p&gt;</span>9月13日，澳大利亚墨尔本市政厅放映了世界上最早的配乐纪录影片《基督教的士兵》。这部纪录片长50分钟，由救世军巴依奥斯克普公司拍摄，为影片配乐作曲的是澳大利亚音乐家R·N·马卡诺里。<span class="nt">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nt">&lt;header&gt;</span>相关传说<span class="nt">&lt;/header&gt;</span>
+</span><span class='line'>  <span class="nt">&lt;img</span> <span class="na">style=</span><span class="s">&quot;float:left&quot;</span> <span class="na">src=</span><span class="s">&quot;images/2.jpg&quot;</span> <span class="nt">/&gt;</span>
+</span><span class='line'>  <span class="nt">&lt;p</span> <span class="na">stye=</span><span class="s">&quot;float:right;text-indent:2em;&quot;</span><span class="nt">&gt;</span>许珀里翁之子赫利俄斯的儿子——巴野顿，天生美丽而性感，他自己也因此感到自负，态度总是傲慢而无礼，太过好 天蝎座在天空中的形状
+</span><span class='line'>      强的个性常使他无意间得罪了不少人。有一天，有个人告诉巴野顿说：“你并非太阳神的儿子！”说完大笑扬长而去，好强的巴野顿怎能吞得下这口气，于是便问自己的母亲：“我到底是不是赫利俄斯的儿子呢？”但是不管母亲如何再三保证他的确就是赫利俄斯所生，巴野顿仍然不相信他的母亲，于是说：“取笑你的人是宙斯的儿子，地位很高，如果仍然不相信，那么去问太阳神赫利俄斯自己吧！”
+</span><span class='line'>      赫利俄斯听了自己儿子的疑问，笑着说：“别听他们胡说，你当然是我的儿子！”
+</span><span class='line'>      巴野顿仍执意不信，其实他当然知道太阳神从不说慌，可是他却另有目的——要求驾驶父亲的太阳车，以证明自己就是赫利俄斯的儿子。“这怎么行？”赫利俄斯大惊，太阳是万物生息的主宰，一不小心就会酿巨祸，但拗不过巴野顿，赫利俄斯正说明着如何在一定轨道驾驶太阳车时，巴野顿心高气傲，听都没听立刻跳上了车，疾驰而去。
+</span><span class='line'>      结果当然很惨，地上的人们、动物、植物不是热死就是冻死，也乱了时间，弄得天错地暗，怨声载道。众神们为了遏止巴野顿，由天后希拉放出一支毒蝎，咬住了巴野顿的脚踝，而宙斯则用可怕的雷霆闪电击中了巴野顿，只见他惨叫一声堕落到地面，死了。
+</span><span class='line'>      人间又恢复了宁静，为了纪念那支也被闪电击毙的毒蝎，这个星座就被命名为“天蝎座”。<span class="nt">&lt;/p&gt;</span>
+</span><span class='line'><span class="nt">&lt;/article&gt;</span>
+</span><span class='line'><span class="nt">&lt;/div&gt;</span>
+</span><span class='line'><span class="nt">&lt;/body&gt;</span>
+</span><span class='line'><span class="nt">&lt;/html&gt;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>WebView拦截css请求，返回分栏实现自适应的css</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+<span class='line-number'>78</span>
+<span class='line-number'>79</span>
+<span class='line-number'>80</span>
+<span class='line-number'>81</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="nd">@Override</span>
+</span><span class='line'><span class="kd">protected</span> <span class="kt">void</span> <span class="nf">onSizeChanged</span><span class="o">(</span><span class="kt">int</span> <span class="n">w</span><span class="o">,</span> <span class="kt">int</span> <span class="n">h</span><span class="o">,</span> <span class="kt">int</span> <span class="n">oldw</span><span class="o">,</span> <span class="kt">int</span> <span class="n">oldh</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>  <span class="kd">super</span><span class="o">.</span><span class="na">onSizeChanged</span><span class="o">(</span><span class="n">w</span><span class="o">,</span> <span class="n">h</span><span class="o">,</span> <span class="n">oldw</span><span class="o">,</span> <span class="n">oldh</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">dpWidth</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="o">(</span><span class="n">w</span> <span class="o">/</span> <span class="n">scale</span><span class="o">);</span>
+</span><span class='line'>  <span class="n">dpHeight</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="o">(</span><span class="n">h</span> <span class="o">/</span> <span class="n">scale</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">webView</span><span class="o">.</span><span class="na">setWebViewClient</span><span class="o">(</span><span class="k">new</span> <span class="nf">WebViewClient</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="nd">@Override</span>
+</span><span class='line'>      <span class="kd">public</span> <span class="n">WebResourceResponse</span> <span class="nf">shouldInterceptRequest</span><span class="o">(</span><span class="n">WebView</span> <span class="n">view</span><span class="o">,</span>
+</span><span class='line'>              <span class="n">String</span> <span class="n">url</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>          <span class="k">if</span> <span class="o">(</span><span class="n">url</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="s">&quot;file:///android_asset/book.css&quot;</span><span class="o">))</span> <span class="o">{</span>
+</span><span class='line'>              <span class="n">StringBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">StringBuilder</span><span class="o">();</span>
+</span><span class='line'>              <span class="n">builder</span><span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">&quot;&quot;</span> <span class="o">+</span> <span class="s">&quot;        body{&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;           margin:0px;&quot;</span> <span class="o">+</span> <span class="s">&quot;        }&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        #content{&quot;</span> <span class="o">+</span> <span class="s">&quot;           margin:0px;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            width: &quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="o">(</span><span class="n">dpWidth</span><span class="o">)</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;px;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span><span class="s">&quot;color:#282828;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            height:&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="o">(</span><span class="n">dpHeight</span> <span class="o">-</span> <span class="mi">20</span><span class="o">)</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;px;&quot;</span>
+</span><span class='line'>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        }&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        header{\n&quot;</span>
+</span><span class='line'>                      <span class="o">+</span><span class="s">&quot;font-family:adobeFont;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;           font-size: 40px;\n&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        }&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        article header{&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            padding:0px;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            margin:0px 50px 0px 50px;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        }&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        img{\n&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            max-width: &quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="o">(</span><span class="n">dpWidth</span> <span class="o">-</span> <span class="mi">110</span><span class="o">)</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;px;\n&quot;</span>
+</span><span class='line'>                      <span class="o">+</span><span class="s">&quot;box-shadow: 3px 3px 3px #787878;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        }&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        article {&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            &quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="c1">// margin: 4px 5px 4px 5px;</span>
+</span><span class='line'>                      <span class="s">&quot;        }&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        article{&quot;</span>
+</span><span class='line'>                      <span class="o">+</span><span class="s">&quot;line-height:200%;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            -webkit-column-width:&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="n">dpWidth</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;px;&quot;</span>
+</span><span class='line'>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            -webkit-column-gap: 10px;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            height:&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="o">(</span><span class="n">dpHeight</span> <span class="o">-</span> <span class="mi">20</span> <span class="o">-</span> <span class="mi">40</span><span class="o">)</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;px;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span><span class="s">&quot;font-family:dqFont;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span><span class="s">&quot;             font-size:25px;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            padding: 0px;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span><span class="s">&quot;margin-top:40px;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        }&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        article *{&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            padding:5px;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            margin:40px 50px 40px 50px;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        }&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        article p{&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            padding:0px;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;            margin:15px 50px 15px 50px;&quot;</span>
+</span><span class='line'>                      <span class="o">+</span> <span class="s">&quot;        }&quot;</span>
+</span><span class='line'>                      <span class="o">+</span><span class="s">&quot;@font-face {font-family: adobeFont;src:url(\&quot;file:///android_asset/fonts/adobe_black.otf\&quot;)}@font-face {font-family: dqFont;src:url(\&quot;file:///android_asset/fonts/dq_black.otf\&quot;)&quot;</span>
+</span><span class='line'>                      <span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'>              <span class="n">ByteArrayInputStream</span> <span class="n">inputStream</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">ByteArrayInputStream</span><span class="o">(</span>
+</span><span class='line'>                      <span class="n">builder</span><span class="o">.</span><span class="na">toString</span><span class="o">().</span><span class="na">getBytes</span><span class="o">());</span>
+</span><span class='line'>              <span class="k">return</span> <span class="k">new</span> <span class="nf">WebResourceResponse</span><span class="o">(</span><span class="s">&quot;text/css&quot;</span><span class="o">,</span> <span class="s">&quot;UTF-8&quot;</span><span class="o">,</span>
+</span><span class='line'>                      <span class="n">inputStream</span><span class="o">);</span>
+</span><span class='line'>          <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>          <span class="k">return</span> <span class="kc">null</span><span class="o">;</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>  <span class="o">});</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">webView</span><span class="o">.</span><span class="na">loadUrl</span><span class="o">(</span><span class="s">&quot;file:///android_asset/book.html&quot;</span><span class="o">);</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>3、提取内容可以动态加载（便于后面和服务器交互）
+将id为content的div内容提取出来，通过ajax加载，修改后的html（提取的内容放到了data.html中）</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class='html'><span class='line'><span class="nt">&lt;html&gt;</span>
+</span><span class='line'><span class="nt">&lt;head&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;title&gt;</span>天蝎座<span class="nt">&lt;/title&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;meta</span> <span class="na">charset=</span><span class="s">&quot;utf-8&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;meta</span> <span class="na">name=</span><span class="s">&quot;viewport&quot;</span> <span class="na">content=</span><span class="s">&quot;initial-scale=1.0, maximum-scale=1.0,width=device-width,user-scalable=no&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;script </span><span class="na">src=</span><span class="s">&quot;jquery-1.9.1.min.js&quot;</span><span class="nt">&gt;&lt;/script&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;link</span> <span class="na">href=</span><span class="s">&quot;book.css&quot;</span> <span class="na">rel=</span><span class="s">&quot;stylesheet&quot;</span> <span class="na">type=</span><span class="s">&quot;text/css&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'>    <span class="nt">&lt;style&gt;</span>
+</span><span class='line'>      <span class="nt">span</span> <span class="p">{</span>
+</span><span class='line'>          <span class="k">padding</span><span class="o">:</span><span class="m">0px</span><span class="p">;</span>
+</span><span class='line'>          <span class="k">margin</span><span class="o">:</span><span class="m">0px</span> <span class="m">0px</span> <span class="m">0px</span> <span class="m">0px</span><span class="p">;</span>
+</span><span class='line'>          <span class="k">background-color</span><span class="o">:</span> <span class="m">#ffd7b6</span><span class="p">;</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="nt">&lt;/style&gt;</span>
+</span><span class='line'><span class="nt">&lt;/head&gt;</span>
+</span><span class='line'><span class="nt">&lt;body</span> <span class="nt">&gt;</span>
+</span><span class='line'><span class="nt">&lt;div</span> <span class="na">id=</span><span class="s">&quot;content&quot;</span><span class="nt">&gt;&lt;/div&gt;</span>
+</span><span class='line'><span class="nt">&lt;script&gt;</span>
+</span><span class='line'>    <span class="nx">$</span><span class="p">(</span><span class="nb">document</span><span class="p">).</span><span class="nx">ready</span><span class="p">(</span><span class="kd">function</span><span class="p">(){</span>
+</span><span class='line'>        <span class="nx">$</span><span class="p">(</span><span class="s1">&#39;#content&#39;</span><span class="p">).</span><span class="nx">load</span><span class="p">(</span><span class="s1">&#39;data/data.html&#39;</span><span class="p">,</span><span class="kd">function</span><span class="p">(){</span>
+</span><span class='line'>        <span class="p">});</span>
+</span><span class='line'>    <span class="p">});</span>
+</span><span class='line'><span class="nt">&lt;/script&gt;</span>
+</span><span class='line'><span class="nt">&lt;/body&gt;</span>
+</span><span class='line'><span class="nt">&lt;/html&gt;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>4、服务器端生成模版化数据</p>
+
+<p>略</p>
+
+<h4>项目参考</h4>
+
+<pre><code>https://github.com/pangff/RM/tree/m1
+</code></pre>
+</div>
+
+</article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style addthis_16x16_style">
+	
+	
+	
+	
+	
+	<a class="addthis_button_compact"></a>
+	<a class="addthis_counter addthis_bubble_style"></a>
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/300/addthis_widget.js#pubid="></script>
+</div>
+
+
+
+  <section>
+    <h1>评论</h1>
+    <div id="comments" aria-live="polite"><!-- Duoshuo Comment BEGIN -->
+<div class="ds-thread"></div>
+<script type="text/javascript">
+  var duoshuoQuery = {short_name:"pffair"};
+  (function() {
+    var ds = document.createElement('script');
+    ds.type = 'text/javascript';ds.async = true;
+    ds.src = 'http://static.duoshuo.com/embed.js';
+    ds.charset = 'UTF-8';
+    (document.getElementsByTagName('head')[0] 
+    || document.getElementsByTagName('body')[0]).appendChild(ds);
+  })();
+</script>
+<!-- Duoshuo Comment END --></div>
+  </section>
+</div>
+			</div>
+			<footer id="footer" class="inner">Copyright &copy; 2021
+
+    pangff
+
+<a href="https://beian.miit.gov.cn/">京ICP备14050056号-1</a>
+
+Design credit: <a href="http://shashankmehta.in/archive/2012/greyshade.html">Shashank Mehta</a>
+<script type="text/javascript">
+var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_1000501877'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s4.cnzz.com/z_stat.php%3Fid%3D1000501877%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));
+</script></footer>
+			<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-52176210-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+		</div>
+	</div>
+</body>
+</html>

@@ -1,0 +1,613 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Android View自定义专题二(View滑动的实现) - Pangff's Blog</title>
+	<meta name="author" content="pangff">
+
+	
+	<meta name="description" content="Android View自定义专题二(View滑动的实现) 接着上一篇Android View自定义专题一 (view的绘制)，我们接下来要在上一篇的基础上为不能换行的textview加上横向滚动条，这里只说x方向滑动（y方向类似）。 实现scroll的思路： 重写onTouchEvent， &hellip;">
+	
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="baidu-site-verification" content="4uVEsGeeHG" />
+  <meta name="google-site-verification" content="RF1uUMXanCzUMdaFqAcD1EUdurAKJag8L8CqWylzCb0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="Pangff's Blog" type="application/atom+xml">
+	
+	<link rel="canonical" href="http://www.pffair.com/blog/2014/06/19/android-viewzi-ding-yi-zhuan-ti-er-viewhua-dong-de-shi-xian/">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700' rel='stylesheet' type='text/css'>
+	
+</head>
+
+
+<body>
+	<div class="container">
+		<div class="left-col">
+			<div class="intrude-less">
+			<header id="header" class="inner"><div class="profilepic">	
+	<script src="/javascripts/md5.js"></script>
+	<script type="text/javascript">
+		document.write("<img src='/images/avatar.jpg' alt='Profile Picture' style='width: 160px;' />");
+	</script>
+</div>
+<h1><a href="/">Pangff's Blog</a></h1>
+<p class="subtitle">stay foolish stay hungry.</p>
+<nav id="main-nav">
+<form action="http://www.pffair.com/search" method="get">
+    <input class="search" name="query" type="text" placeholder="Search..."/>
+</form>
+
+<ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+	<li><a href="/about">About</a></li>
+</ul>
+</nav>
+<nav id="sub-nav">
+	<div class="social">
+		
+		
+		
+		
+		
+		<a class="github" href="https://github.com/pangff" title="GitHub">GitHub</a>
+		
+		
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</nav>
+<gcse:search></gcse:search>
+<section>
+  <h1></h1>
+  <ul id="categories">
+    <li class='category'><a href='/blog/categories/3d/'>3d (3)</a></li>
+<li class='category'><a href='/blog/categories/android/'>android (26)</a></li>
+<li class='category'><a href='/blog/categories/docker/'>docker (6)</a></li>
+<li class='category'><a href='/blog/categories/filechooser/'>filechooser (1)</a></li>
+<li class='category'><a href='/blog/categories/js/'>js (1)</a></li>
+<li class='category'><a href='/blog/categories/pathview/'>pathview (1)</a></li>
+<li class='category'><a href='/blog/categories/pdf/'>pdf (1)</a></li>
+<li class='category'><a href='/blog/categories/react/'>react (1)</a></li>
+<li class='category'><a href='/blog/categories/redux/'>redux (1)</a></li>
+<li class='category'><a href='/blog/categories/svg/'>svg (2)</a></li>
+<li class='category'><a href='/blog/categories/tomcat/'>tomcat (1)</a></li>
+<li class='category'><a href='/blog/categories/turn/'>turn (1)</a></li>
+<li class='category'><a href='/blog/categories/vectordrawable/'>vectordrawable (1)</a></li>
+<li class='category'><a href='/blog/categories/webrtc/'>webrtc (1)</a></li>
+<li class='category'><a href='/blog/categories/webview/'>webview (1)</a></li>
+<li class='category'><a href='/blog/categories/bei-wang/'>备忘 (3)</a></li>
+<li class='category'><a href='/blog/categories/xing-neng-you-hua/'>性能优化 (2)</a></li>
+<li class='category'><a href='/blog/categories/fu-wu-duan/'>服务端 (1)</a></li>
+<li class='category'><a href='/blog/categories/shi-liang-tu/'>矢量图 (1)</a></li>
+
+  </ul>
+</section>
+
+
+</header>				
+			</div>
+		</div>	
+		<div class="mid-col">
+			
+				
+			
+			<div class="mid-col-container">
+				<div id="content" class="inner"><article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+	<h1 class="title" itemprop="name">Android View自定义专题二(View滑动的实现)</h1>
+	<div class="entry-content" itemprop="articleBody"><p>接着上一篇Android View自定义专题一 (view的绘制)，我们接下来要在上一篇的基础上为不能换行的textview加上横向滚动条，这里只说x方向滑动（y方向类似）。</p>
+
+<!--more-->
+
+
+<h4>实现scroll的思路：</h4>
+
+<p>重写onTouchEvent，</p>
+
+<ul>
+<li> ACTION_DOWN纪录按下x位置，</li>
+<li> ACTION_MOVE用当按下x减去当前x获得需要滑动距离调用scrollBy滑动</li>
+<li> 在ACTION_UP抬起时需要根据当前的速度来惯性的再滑动一段距离，所以需要纪录手指抬起的速度，和需要滑动的最大距离</li>
+</ul>
+
+
+<h4>具体实现：</h4>
+
+<p>一、在昨天代码基础上重写onTouchEvent并在ACTION_DOWN纪录手指按下的x</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="nd">@Override</span>
+</span><span class='line'><span class="kd">public</span> <span class="kt">boolean</span> <span class="nf">onTouchEvent</span><span class="o">(</span><span class="n">MotionEvent</span> <span class="n">event</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">switch</span><span class="o">(</span><span class="n">event</span><span class="o">.</span><span class="na">getAction</span><span class="o">())</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">caseMotionEvent</span><span class="o">.</span><span class="na">ACTION_DOWN</span><span class="o">:</span>
+</span><span class='line'>            <span class="n">downX</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="n">event</span><span class="o">.</span><span class="na">getX</span><span class="o">();</span><span class="c1">//纪录按下位置</span>
+</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>        <span class="n">caseMotionEvent</span><span class="o">.</span><span class="na">ACTION_MOVE</span><span class="o">:</span>
+</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>        <span class="n">caseMotionEvent</span><span class="o">.</span><span class="na">ACTION_UP</span><span class="o">:</span>
+</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>        <span class="k">default</span><span class="o">:</span>
+</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="n">returntrue</span><span class="o">;</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>二、在ACTION_MOVE中获取移动距离，并调用滑动响应距离</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="nd">@Override</span>
+</span><span class='line'><span class="kd">public</span> <span class="kt">boolean</span> <span class="nf">onTouchEvent</span><span class="o">(</span><span class="n">MotionEvent</span> <span class="n">event</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">switch</span><span class="o">(</span><span class="n">event</span><span class="o">.</span><span class="na">getAction</span><span class="o">())</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">caseMotionEvent</span><span class="o">.</span><span class="na">ACTION_DOWN</span><span class="o">:</span>
+</span><span class='line'>            <span class="n">downX</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="n">event</span><span class="o">.</span><span class="na">getX</span><span class="o">();</span>
+</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>        <span class="n">caseMotionEvent</span><span class="o">.</span><span class="na">ACTION_MOVE</span><span class="o">:</span>
+</span><span class='line'>            <span class="n">intdx</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="o">(</span><span class="n">downX</span> <span class="o">-</span> <span class="n">event</span><span class="o">.</span><span class="na">getX</span><span class="o">());</span>
+</span><span class='line'>            <span class="n">scrollBy</span><span class="o">(</span><span class="n">dx</span><span class="o">,</span><span class="mi">0</span><span class="o">);</span>
+</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>        <span class="n">caseMotionEvent</span><span class="o">.</span><span class="na">ACTION_UP</span><span class="o">:</span>
+</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>        <span class="k">default</span><span class="o">:</span>
+</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="n">returntrue</span><span class="o">;</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>三、在滑动时要根据滑动边界来限制滑动距离（最小scrollX为0即初始最左位置，最大scrollX＝内容最大宽度－view宽度，即可滑动最大距离）</p>
+
+<ul>
+<li>获取view最大宽度和内容最大宽度</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'> <span class="cm">/**</span>
+</span><span class='line'><span class="cm"> * 计算view的宽度</span>
+</span><span class='line'><span class="cm"> * @param measureSpec</span>
+</span><span class='line'><span class="cm"> * @return</span>
+</span><span class='line'><span class="cm"> */</span>
+</span><span class='line'><span class="kd">private</span> <span class="kt">int</span> <span class="nf">measureWidth</span><span class="o">(</span><span class="n">intmeasureSpec</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">intresult</span> <span class="o">=</span><span class="mi">0</span><span class="o">;</span>
+</span><span class='line'>    <span class="n">intspecMode</span> <span class="o">=</span> <span class="n">MeasureSpec</span><span class="o">.</span><span class="na">getMode</span><span class="o">(</span><span class="n">measureSpec</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">intspecSize</span> <span class="o">=</span> <span class="n">MeasureSpec</span><span class="o">.</span><span class="na">getSize</span><span class="o">(</span><span class="n">measureSpec</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">viewWidth</span> <span class="o">=</span> <span class="n">specSize</span><span class="o">;</span><span class="c1">//视图view宽度</span>
+</span><span class='line'>    <span class="k">if</span><span class="o">(</span><span class="n">specMode</span> <span class="o">==</span> <span class="n">MeasureSpec</span><span class="o">.</span><span class="na">EXACTLY</span><span class="o">)</span> <span class="o">{</span><span class="c1">// match_parent或具体数值,直接使用</span>
+</span><span class='line'>        <span class="n">result</span> <span class="o">=</span> <span class="n">specSize</span><span class="o">;</span>
+</span><span class='line'>    <span class="o">}</span><span class="k">else</span><span class="o">{</span><span class="c1">// 否则自己计算</span>
+</span><span class='line'>        <span class="c1">// 计算文字宽度</span>
+</span><span class='line'>        <span class="n">result</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="n">mTextPaint</span><span class="o">.</span><span class="na">measureText</span><span class="o">(</span><span class="n">mText</span><span class="o">)</span> <span class="o">+</span> <span class="n">getPaddingLeft</span><span class="o">()+</span> <span class="n">getPaddingRight</span><span class="o">();</span>
+</span><span class='line'>        <span class="n">maxWidth</span> <span class="o">=</span> <span class="n">result</span><span class="o">;</span><span class="c1">//内容宽度</span>
+</span><span class='line'>        <span class="k">if</span><span class="o">(</span><span class="n">specMode</span> <span class="o">==</span> <span class="n">MeasureSpec</span><span class="o">.</span><span class="na">AT_MOST</span><span class="o">)</span> <span class="o">{</span><span class="c1">// wrap_content</span>
+</span><span class='line'>            <span class="c1">// 取specSize和计算出的文字宽度最小数值，如果result大于specSize说明文字超出了view宽度范围</span>
+</span><span class='line'>            <span class="n">result</span> <span class="o">=</span> <span class="n">Math</span><span class="o">.</span><span class="na">min</span><span class="o">(</span><span class="n">result</span><span class="o">,</span> <span class="n">specSize</span><span class="o">);</span>
+</span><span class='line'>        <span class="o">}</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="n">returnresult</span><span class="o">;</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>根据最小最大滑动距离限制scrollBy的距离</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="cm">/**</span>
+</span><span class='line'><span class="cm"> * 获取最大的滑动距离</span>
+</span><span class='line'><span class="cm"> * @return</span>
+</span><span class='line'><span class="cm"> */</span>
+</span><span class='line'><span class="kd">public</span> <span class="kt">int</span> <span class="nf">getMaxScrollX</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">if</span><span class="o">(</span><span class="n">maxWidth</span> <span class="o">-</span> <span class="n">viewWidth</span> <span class="o">&gt;</span><span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>        <span class="k">return</span><span class="o">(</span><span class="n">maxWidth</span> <span class="o">-</span> <span class="n">viewWidth</span><span class="o">);</span>
+</span><span class='line'>    <span class="o">}</span><span class="k">else</span><span class="o">{</span>
+</span><span class='line'>        <span class="n">return0</span><span class="o">;</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>根据两个最大宽度获取可滑动最大距离</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="cm">/**</span>
+</span><span class='line'><span class="cm"> * 对超出范围进行判断</span>
+</span><span class='line'><span class="cm"> */</span>
+</span><span class='line'><span class="kd">public</span> <span class="kt">void</span> <span class="nf">scrollBy</span><span class="o">(</span><span class="n">intdx</span><span class="o">,</span><span class="n">intdy</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">if</span><span class="o">(</span><span class="n">getScrollX</span><span class="o">()</span> <span class="o">+</span> <span class="n">dx</span> <span class="o">&gt;</span> <span class="n">getMaxScrollX</span><span class="o">())</span> <span class="o">{</span><span class="c1">//超出最大范围</span>
+</span><span class='line'>        <span class="kd">super</span><span class="o">.</span><span class="na">scrollBy</span><span class="o">(</span><span class="n">getMaxScrollX</span><span class="o">()</span> <span class="o">-</span> <span class="n">getScrollX</span><span class="o">(),</span><span class="mi">0</span><span class="o">);</span>
+</span><span class='line'>    <span class="o">}</span><span class="n">elseif</span><span class="o">(</span><span class="n">getScrollX</span><span class="o">()</span> <span class="o">+</span> <span class="n">dx</span> <span class="o">&lt;</span><span class="mi">0</span><span class="o">)</span> <span class="o">{</span><span class="c1">//超出最小范围</span>
+</span><span class='line'>        <span class="kd">super</span><span class="o">.</span><span class="na">scrollBy</span><span class="o">(-</span><span class="n">getScrollX</span><span class="o">(),</span><span class="mi">0</span><span class="o">);</span>
+</span><span class='line'>    <span class="o">}</span><span class="k">else</span><span class="o">{</span>
+</span><span class='line'>        <span class="kd">super</span><span class="o">.</span><span class="na">scrollBy</span><span class="o">(</span><span class="n">dx</span><span class="o">,</span><span class="mi">0</span><span class="o">);</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>四、根据滑动速度进行ACTION_UP的惯性滑动</p>
+
+<ul>
+<li>初始化系统最大最小滑动速度以及滑动线程</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="nf">MyView</span><span class="o">(</span><span class="n">Context</span> <span class="n">context</span><span class="o">,</span> <span class="n">AttributeSet</span> <span class="n">attrs</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="kd">super</span><span class="o">(</span><span class="n">context</span><span class="o">,</span> <span class="n">attrs</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">initLabelView</span><span class="o">();</span>
+</span><span class='line'>    <span class="k">this</span><span class="o">.</span><span class="na">flinger</span> <span class="o">=</span><span class="n">newFlinger</span><span class="o">(</span><span class="n">context</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">finalViewConfiguration</span> <span class="n">configuration</span> <span class="o">=</span> <span class="n">ViewConfiguration</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">context</span><span class="o">);</span>
+</span><span class='line'>    <span class="k">this</span><span class="o">.</span><span class="na">minimumVelocity</span> <span class="o">=</span> <span class="n">configuration</span><span class="o">.</span><span class="na">getScaledMinimumFlingVelocity</span><span class="o">();</span>
+</span><span class='line'>    <span class="k">this</span><span class="o">.</span><span class="na">maximumVelocity</span> <span class="o">=</span> <span class="n">configuration</span><span class="o">.</span><span class="na">getScaledMaximumFlingVelocity</span><span class="o">();</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>onTouchEvent进行相关配置并启动滑动线程</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="nd">@Override</span>
+</span><span class='line'><span class="kd">public</span> <span class="kt">boolean</span> <span class="nf">onTouchEvent</span><span class="o">(</span><span class="n">MotionEvent</span> <span class="n">event</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">if</span><span class="o">(</span><span class="n">velocityTracker</span> <span class="o">==</span><span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">velocityTracker</span> <span class="o">=</span> <span class="n">VelocityTracker</span><span class="o">.</span><span class="na">obtain</span><span class="o">();</span><span class="c1">// 初始化速度追踪器</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="n">velocityTracker</span><span class="o">.</span><span class="na">addMovement</span><span class="o">(</span><span class="n">event</span><span class="o">);</span><span class="c1">// 添加事件到速度追踪器中</span>
+</span><span class='line'>    <span class="k">switch</span><span class="o">(</span><span class="n">event</span><span class="o">.</span><span class="na">getAction</span><span class="o">())</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">caseMotionEvent</span><span class="o">.</span><span class="na">ACTION_DOWN</span><span class="o">:</span>
+</span><span class='line'>            <span class="n">downX</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="n">event</span><span class="o">.</span><span class="na">getX</span><span class="o">();</span>
+</span><span class='line'>            <span class="k">if</span><span class="o">(!</span><span class="n">flinger</span><span class="o">.</span><span class="na">isFinished</span><span class="o">())</span> <span class="o">{</span><span class="c1">// 如果正在滚动马上停止</span>
+</span><span class='line'>                <span class="n">flinger</span><span class="o">.</span><span class="na">forceFinished</span><span class="o">();</span>
+</span><span class='line'>            <span class="o">}</span>
+</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>        <span class="n">caseMotionEvent</span><span class="o">.</span><span class="na">ACTION_MOVE</span><span class="o">:</span>
+</span><span class='line'>            <span class="n">intdx</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="o">(</span><span class="n">downX</span> <span class="o">-</span> <span class="n">event</span><span class="o">.</span><span class="na">getX</span><span class="o">());</span>
+</span><span class='line'>            <span class="n">scrollBy</span><span class="o">(</span><span class="n">dx</span><span class="o">,</span><span class="mi">0</span><span class="o">);</span>
+</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>        <span class="n">caseMotionEvent</span><span class="o">.</span><span class="na">ACTION_UP</span><span class="o">:</span>
+</span><span class='line'>            <span class="n">finalVelocityTracker</span> <span class="n">velocityTracker</span> <span class="o">=</span><span class="k">this</span><span class="o">.</span><span class="na">velocityTracker</span><span class="o">;</span>
+</span><span class='line'>            <span class="n">velocityTracker</span><span class="o">.</span><span class="na">computeCurrentVelocity</span><span class="o">(</span><span class="mi">1000</span><span class="o">,</span> <span class="n">maximumVelocity</span><span class="o">);</span><span class="c1">//计算当前速度(按1秒为单位)</span>
+</span><span class='line'>            <span class="n">intvelocityX</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="n">velocityTracker</span><span class="o">.</span><span class="na">getXVelocity</span><span class="o">();</span><span class="c1">//获取x方向速度</span>
+</span><span class='line'>            <span class="n">intvelocityY</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="n">velocityTracker</span><span class="o">.</span><span class="na">getYVelocity</span><span class="o">();</span><span class="c1">//获取y方向速度</span>
+</span><span class='line'>            <span class="k">if</span><span class="o">(</span><span class="n">Math</span><span class="o">.</span><span class="na">abs</span><span class="o">(</span><span class="n">velocityX</span><span class="o">)</span> <span class="o">&gt;</span> <span class="n">minimumVelocity</span><span class="o">||</span> <span class="n">Math</span><span class="o">.</span><span class="na">abs</span><span class="o">(</span><span class="n">velocityY</span><span class="o">)</span> <span class="o">&gt;</span> <span class="n">minimumVelocity</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>                <span class="n">flinger</span><span class="o">.</span><span class="na">start</span><span class="o">(</span><span class="n">getScrollX</span><span class="o">(),</span> <span class="n">getScrollY</span><span class="o">(),</span> <span class="n">velocityX</span><span class="o">,</span><span class="mi">0</span><span class="o">,</span><span class="n">getMaxScrollX</span><span class="o">(),</span><span class="mi">0</span><span class="o">);</span>
+</span><span class='line'>            <span class="o">}</span><span class="k">else</span><span class="o">{</span><span class="c1">// 记得回收</span>
+</span><span class='line'>                <span class="k">if</span><span class="o">(</span><span class="k">this</span><span class="o">.</span><span class="na">velocityTracker</span> <span class="o">!=</span><span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>                    <span class="k">this</span><span class="o">.</span><span class="na">velocityTracker</span><span class="o">.</span><span class="na">recycle</span><span class="o">();</span>
+</span><span class='line'>                    <span class="k">this</span><span class="o">.</span><span class="na">velocityTracker</span> <span class="o">=</span><span class="kc">null</span><span class="o">;</span>
+</span><span class='line'>                <span class="o">}</span>
+</span><span class='line'>            <span class="o">}</span>
+</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>        <span class="k">default</span><span class="o">:</span>
+</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="n">returntrue</span><span class="o">;</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>滚动线程</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="cm">/**</span>
+</span><span class='line'><span class="cm"> * 控制滚动的线程</span>
+</span><span class='line'><span class="cm"> * @author pangff</span>
+</span><span class='line'><span class="cm"> */</span>
+</span><span class='line'><span class="kd">private</span> <span class="kd">class</span> <span class="nc">Flinger</span> <span class="kd">implements</span> <span class="n">Runnable</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">privatefinalScroller</span> <span class="n">scroller</span><span class="o">;</span>
+</span><span class='line'><span class="n">privateintlastX</span> <span class="o">=</span><span class="mi">0</span><span class="o">;</span>
+</span><span class='line'><span class="n">privateintlastY</span> <span class="o">=</span><span class="mi">0</span><span class="o">;</span>
+</span><span class='line'><span class="n">Flinger</span><span class="o">(</span><span class="n">Context</span> <span class="n">context</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'><span class="n">scroller</span> <span class="o">=</span><span class="n">newScroller</span><span class="o">(</span><span class="n">context</span><span class="o">);</span>
+</span><span class='line'><span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">voidstart</span><span class="o">(</span><span class="n">intinitX</span><span class="o">,</span><span class="n">intinitY</span><span class="o">,</span><span class="n">intinitialVelocityX</span><span class="o">,</span><span class="n">intinitialVelocityY</span><span class="o">,</span><span class="n">intmaxX</span><span class="o">,</span><span class="n">intmaxY</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'><span class="n">scroller</span><span class="o">.</span><span class="na">fling</span><span class="o">(</span><span class="n">initX</span><span class="o">,</span> <span class="n">initY</span><span class="o">,</span> <span class="n">initialVelocityX</span><span class="o">,</span> <span class="n">initialVelocityY</span><span class="o">,</span><span class="mi">0</span><span class="o">,</span><span class="n">maxX</span><span class="o">,</span><span class="mi">0</span><span class="o">,</span> <span class="n">maxY</span><span class="o">);</span>
+</span><span class='line'><span class="n">lastX</span> <span class="o">=</span> <span class="n">initX</span><span class="o">;</span>
+</span><span class='line'><span class="n">lastY</span> <span class="o">=</span> <span class="n">initY</span><span class="o">;</span>
+</span><span class='line'><span class="n">post</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>
+</span><span class='line'><span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">publicvoidrun</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'><span class="k">if</span><span class="o">(</span><span class="n">scroller</span><span class="o">.</span><span class="na">isFinished</span><span class="o">())</span> <span class="o">{</span>
+</span><span class='line'><span class="k">return</span><span class="o">;</span>
+</span><span class='line'><span class="o">}</span>
+</span><span class='line'><span class="n">booleanmore</span> <span class="o">=</span> <span class="n">scroller</span><span class="o">.</span><span class="na">computeScrollOffset</span><span class="o">();</span><span class="c1">//获取是否需要继续滑动</span>
+</span><span class='line'><span class="n">intx</span> <span class="o">=</span> <span class="n">scroller</span><span class="o">.</span><span class="na">getCurrX</span><span class="o">();</span><span class="c1">//获取滑动中的当前scrollX</span>
+</span><span class='line'><span class="n">inty</span> <span class="o">=</span> <span class="n">scroller</span><span class="o">.</span><span class="na">getCurrY</span><span class="o">();</span><span class="c1">//获取滑动中的当前scrollY</span>
+</span><span class='line'><span class="n">intdiffX</span> <span class="o">=</span> <span class="n">lastX</span> <span class="o">-</span> <span class="n">x</span><span class="o">;</span><span class="c1">//取增量</span>
+</span><span class='line'><span class="n">intdiffY</span> <span class="o">=</span> <span class="n">lastY</span> <span class="o">-</span> <span class="n">y</span><span class="o">;</span><span class="c1">//取增量</span>
+</span><span class='line'><span class="k">if</span><span class="o">(</span><span class="n">diffX</span> <span class="o">!=</span><span class="mi">0</span><span class="o">||</span> <span class="n">diffY</span> <span class="o">!=</span><span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'><span class="n">scrollBy</span><span class="o">(</span><span class="n">diffX</span><span class="o">,</span> <span class="n">diffY</span><span class="o">);</span>
+</span><span class='line'><span class="n">lastX</span> <span class="o">=</span> <span class="n">x</span><span class="o">;</span><span class="c1">//纪录当前位置</span>
+</span><span class='line'><span class="n">lastY</span> <span class="o">=</span> <span class="n">y</span><span class="o">;</span><span class="c1">//纪录当前位置</span>
+</span><span class='line'><span class="o">}</span>
+</span><span class='line'><span class="k">if</span><span class="o">(</span><span class="n">more</span><span class="o">)</span> <span class="o">{</span><span class="c1">//如果还需要继续滑动，再次执行</span>
+</span><span class='line'><span class="n">post</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>
+</span><span class='line'><span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">booleanisFinished</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'><span class="n">returnscroller</span><span class="o">.</span><span class="na">isFinished</span><span class="o">();</span>
+</span><span class='line'><span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">voidforceFinished</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'><span class="k">if</span><span class="o">(!</span><span class="n">scroller</span><span class="o">.</span><span class="na">isFinished</span><span class="o">())</span> <span class="o">{</span>
+</span><span class='line'><span class="n">scroller</span><span class="o">.</span><span class="na">forceFinished</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+</span><span class='line'><span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>参考代码</h4>
+
+<p><a href="https://github.com/pangff/DemoView/tree/v2">https://github.com/pangff/DemoView/tree/v2</a></p>
+</div>
+
+</article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style addthis_16x16_style">
+	
+	
+	
+	
+	
+	<a class="addthis_button_compact"></a>
+	<a class="addthis_counter addthis_bubble_style"></a>
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/300/addthis_widget.js#pubid="></script>
+</div>
+
+
+
+  <section>
+    <h1>评论</h1>
+    <div id="comments" aria-live="polite"><!-- Duoshuo Comment BEGIN -->
+<div class="ds-thread"></div>
+<script type="text/javascript">
+  var duoshuoQuery = {short_name:"pffair"};
+  (function() {
+    var ds = document.createElement('script');
+    ds.type = 'text/javascript';ds.async = true;
+    ds.src = 'http://static.duoshuo.com/embed.js';
+    ds.charset = 'UTF-8';
+    (document.getElementsByTagName('head')[0] 
+    || document.getElementsByTagName('body')[0]).appendChild(ds);
+  })();
+</script>
+<!-- Duoshuo Comment END --></div>
+  </section>
+</div>
+			</div>
+			<footer id="footer" class="inner">Copyright &copy; 2021
+
+    pangff
+
+<a href="https://beian.miit.gov.cn/">京ICP备14050056号-1</a>
+
+Design credit: <a href="http://shashankmehta.in/archive/2012/greyshade.html">Shashank Mehta</a>
+<script type="text/javascript">
+var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_1000501877'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s4.cnzz.com/z_stat.php%3Fid%3D1000501877%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));
+</script></footer>
+			<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-52176210-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+		</div>
+	</div>
+</body>
+</html>

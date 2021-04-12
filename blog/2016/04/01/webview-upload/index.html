@@ -1,0 +1,314 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>WebView图片上传的各种坑 - Pangff's Blog</title>
+	<meta name="author" content="pangff">
+
+	
+	<meta name="description" content="WebView图片上传的各种坑 最近项目用到了应用内webview图片上传，虽然最终实现了，但是遇到了各种坑，抽时间总结一下。 我们在应用中用webview加载了一个wap页面，该wap页面需要通过input标签调起本地文件选择。看了前人遗留的webview代码， &hellip;">
+	
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="baidu-site-verification" content="4uVEsGeeHG" />
+  <meta name="google-site-verification" content="RF1uUMXanCzUMdaFqAcD1EUdurAKJag8L8CqWylzCb0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="Pangff's Blog" type="application/atom+xml">
+	
+	<link rel="canonical" href="http://www.pffair.com/blog/2016/04/01/webview-upload/">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700' rel='stylesheet' type='text/css'>
+	
+</head>
+
+
+<body>
+	<div class="container">
+		<div class="left-col">
+			<div class="intrude-less">
+			<header id="header" class="inner"><div class="profilepic">	
+	<script src="/javascripts/md5.js"></script>
+	<script type="text/javascript">
+		document.write("<img src='/images/avatar.jpg' alt='Profile Picture' style='width: 160px;' />");
+	</script>
+</div>
+<h1><a href="/">Pangff's Blog</a></h1>
+<p class="subtitle">stay foolish stay hungry.</p>
+<nav id="main-nav">
+<form action="http://www.pffair.com/search" method="get">
+    <input class="search" name="query" type="text" placeholder="Search..."/>
+</form>
+
+<ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+	<li><a href="/about">About</a></li>
+</ul>
+</nav>
+<nav id="sub-nav">
+	<div class="social">
+		
+		
+		
+		
+		
+		<a class="github" href="https://github.com/pangff" title="GitHub">GitHub</a>
+		
+		
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</nav>
+<gcse:search></gcse:search>
+<section>
+  <h1></h1>
+  <ul id="categories">
+    <li class='category'><a href='/blog/categories/3d/'>3d (3)</a></li>
+<li class='category'><a href='/blog/categories/android/'>android (26)</a></li>
+<li class='category'><a href='/blog/categories/docker/'>docker (6)</a></li>
+<li class='category'><a href='/blog/categories/filechooser/'>filechooser (1)</a></li>
+<li class='category'><a href='/blog/categories/js/'>js (1)</a></li>
+<li class='category'><a href='/blog/categories/pathview/'>pathview (1)</a></li>
+<li class='category'><a href='/blog/categories/pdf/'>pdf (1)</a></li>
+<li class='category'><a href='/blog/categories/react/'>react (1)</a></li>
+<li class='category'><a href='/blog/categories/redux/'>redux (1)</a></li>
+<li class='category'><a href='/blog/categories/svg/'>svg (2)</a></li>
+<li class='category'><a href='/blog/categories/tomcat/'>tomcat (1)</a></li>
+<li class='category'><a href='/blog/categories/turn/'>turn (1)</a></li>
+<li class='category'><a href='/blog/categories/vectordrawable/'>vectordrawable (1)</a></li>
+<li class='category'><a href='/blog/categories/webrtc/'>webrtc (1)</a></li>
+<li class='category'><a href='/blog/categories/webview/'>webview (1)</a></li>
+<li class='category'><a href='/blog/categories/bei-wang/'>备忘 (3)</a></li>
+<li class='category'><a href='/blog/categories/xing-neng-you-hua/'>性能优化 (2)</a></li>
+<li class='category'><a href='/blog/categories/fu-wu-duan/'>服务端 (1)</a></li>
+<li class='category'><a href='/blog/categories/shi-liang-tu/'>矢量图 (1)</a></li>
+
+  </ul>
+</section>
+
+
+</header>				
+			</div>
+		</div>	
+		<div class="mid-col">
+			
+				
+			
+			<div class="mid-col-container">
+				<div id="content" class="inner"><article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+	<h1 class="title" itemprop="name">WebView图片上传的各种坑</h1>
+	<div class="entry-content" itemprop="articleBody"><p>最近项目用到了应用内webview图片上传，虽然最终实现了，但是遇到了各种坑，抽时间总结一下。</p>
+
+<!--more-->
+
+
+<p>我们在应用中用webview加载了一个wap页面，该wap页面需要通过input标签调起本地文件选择。看了前人遗留的webview代码，有重写WebChromeClient的openFileChooser方法，但是经过测试在有些设备上只弹出一次文件选择取消后就再也弹不出来，有些设置上干脆一次都不会弹出来。至此，走向webview文件选择的填坑之路。</p>
+
+<h3>首先解决一次都弹不出的问题。</h3>
+
+<p>经过测试发现这个问题集中在5.0以上的设备，忽然有点儿印象在5.0以上WebChromeClient貌似是做过改动，翻下api发现果然多了一个onShowFileChooser方法。重写WebChromeClient onShowFileChooser 并返回true。这时候在5.0、6.0设备上可以弹出了，但是还是像之前能弹出的设备一样取消后就再也出不来了</p>
+
+<h3>接下来解决某些设备只弹出一次问题</h3>
+
+<p>在stackoverflow搜了半天也没有找到合适答案，于是再看了下onShowFileChooser的api，忽然发现了一句话</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>To cancel the request, call filePathCallback.onReceiveValue(null) and return true.</span></code></pre></td></tr></table></div></figure>
+
+
+<p>恍然大悟，原来取消依然是需要回调onReceiveValue。因此在当前页面onResume时候加上如下代码</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="k">if</span><span class="o">(</span><span class="n">filePathCallback</span><span class="o">!=</span><span class="kc">null</span><span class="o">){</span>
+</span><span class='line'>   <span class="n">filePathCallback</span><span class="o">.</span><span class="na">onReceiveValue</span><span class="o">(</span><span class="kc">null</span><span class="o">);</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>问题得到解决。需要注意的是在onActivityResult中回调后要将filePathCallback置空，否则当选择一个图片或者拍照返回到页面时onActivityResult 和 onResume都会触发，而且onActivityResult 在 onResume之前。因此不在onActivityResult置空filePathCallback的话会触发两次回调，可能会产生问题（没有验证）.</p>
+
+<p>后面进行正常上传，发现onActivityResult一直不回调。因为webview是在Fragmengt中，因此代码中将Activity的onActivityResult委托给了该Activity下面的WebviewFragment中，如下代码</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="k">else</span> <span class="nf">if</span> <span class="o">(</span><span class="n">requestCode</span> <span class="o">==</span> <span class="n">WebViewFragment</span><span class="o">.</span><span class="na">FILECHOOSER_RESULTCODE</span><span class="o">){</span>
+</span><span class='line'>    <span class="k">if</span><span class="o">(</span><span class="n">mFragment</span><span class="o">!=</span><span class="kc">null</span><span class="o">){</span>
+</span><span class='line'>       <span class="n">mFragment</span><span class="o">.</span><span class="na">onActivityResult</span><span class="o">(</span><span class="n">requestCode</span><span class="o">,</span><span class="n">resultCode</span><span class="o">,</span><span class="n">data</span><span class="o">);</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>但是requestCode == WebViewFragment.FILECHOOSER_RESULTCODE的条件判断一直是false，奇怪&hellip;</p>
+
+<h3>Fragment startActivityForResult的坑</h3>
+
+<p>Debug代码进入fragment源码中发现调用顺序是 Fragment［startActivityForResult］->［FragmentActivity］onStartActivityFromFragment -> ［FragmentActivity］ startActivityFromFragment。就在这个方法中,看下源码</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="cm">/**</span>
+</span><span class='line'><span class="cm">     * Called by Fragment.startActivityForResult() to implement its behavior.</span>
+</span><span class='line'><span class="cm">     */</span>
+</span><span class='line'>    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">startActivityFromFragment</span><span class="o">(</span><span class="n">Fragment</span> <span class="n">fragment</span><span class="o">,</span> <span class="n">Intent</span> <span class="n">intent</span><span class="o">,</span>
+</span><span class='line'>            <span class="kt">int</span> <span class="n">requestCode</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>        <span class="k">if</span> <span class="o">(</span><span class="n">requestCode</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>            <span class="kd">super</span><span class="o">.</span><span class="na">startActivityForResult</span><span class="o">(</span><span class="n">intent</span><span class="o">,</span> <span class="o">-</span><span class="mi">1</span><span class="o">);</span>
+</span><span class='line'>            <span class="k">return</span><span class="o">;</span>
+</span><span class='line'>        <span class="o">}</span>
+</span><span class='line'>        <span class="k">if</span> <span class="o">((</span><span class="n">requestCode</span><span class="o">&amp;</span><span class="mh">0xffff0000</span><span class="o">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>            <span class="k">throw</span> <span class="k">new</span> <span class="nf">IllegalArgumentException</span><span class="o">(</span><span class="s">&quot;Can only use lower 16 bits for requestCode&quot;</span><span class="o">);</span>
+</span><span class='line'>        <span class="o">}</span>
+</span><span class='line'>        <span class="kd">super</span><span class="o">.</span><span class="na">startActivityForResult</span><span class="o">(</span><span class="n">intent</span><span class="o">,</span> <span class="o">((</span><span class="n">fragment</span><span class="o">.</span><span class="na">mIndex</span><span class="o">+</span><span class="mi">1</span><span class="o">)&lt;&lt;</span><span class="mi">16</span><span class="o">)</span> <span class="o">+</span> <span class="o">(</span><span class="n">requestCode</span><span class="o">&amp;</span><span class="mh">0xffff</span><span class="o">));</span>
+</span><span class='line'>    <span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>你会发现super.startActivityForResult的requestCode被改变了,后16位前拼了fragment.mIndex+1。这时候你的Ativity将永远不会返回你之前传的requestCode。解决方法,使用activity去调用就可以了</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'> <span class="n">getActivity</span><span class="o">().</span><span class="na">startActivityForResult</span><span class="o">(</span><span class="n">chooserIntent</span><span class="o">,</span> <span class="n">FILECHOOSER_RESULTCODE</span><span class="o">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<p>现在结束了吗？debug包没问题一切正常。试试release，忽然发现又打不开了。难道和混淆有关系？查了一下还真是</p>
+
+<h3>解决混淆问题</h3>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="o">-</span><span class="n">keepclassmembers</span> <span class="kd">class</span> <span class="err">* </span><span class="nc">extends</span> <span class="n">android</span><span class="o">.</span><span class="na">webkit</span><span class="o">.</span><span class="na">WebChromeClient</span> <span class="o">{</span>
+</span><span class='line'>     <span class="kd">public</span> <span class="kt">void</span> <span class="nf">openFileChooser</span><span class="o">(...);</span>
+</span><span class='line'>     <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onShowFileChooser</span><span class="o">(...);</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>终于解决了。</p>
+
+<p>之后又看了一些资料，其实openFileChooser一直都没有在Android API中开放，有个<a href="http://stackoverflow.com/questions/30078217/why-openfilechooser-in-webchromeclient-is-hidden-from-the-docs-is-it-safe-to-us">stackoverflow上的说明比较详细</a></p>
+
+<pre><code>Using the old openFileChooser(...) callbacks does not have any security implications. It's just fine. The only downside is that it will not be called on some platform levels and therefore not work.
+
+void openFileChooser(ValueCallback&lt;Uri&gt; uploadMsg) works on Android 2.2 (API level 8) up to Android 2.3 (API level 10)
+
+openFileChooser(ValueCallback&lt;Uri&gt; uploadMsg, String acceptType) works on Android 3.0 (API level 11) up to Android 4.0 (API level 15)
+openFileChooser(ValueCallback&lt;Uri&gt; uploadMsg, String acceptType, String capture) works on Android 4.1 (API level 16) up to Android 4.3 (API level 18)
+
+onShowFileChooser(WebView webView, ValueCallback&lt;Uri[]&gt; filePathCallback, WebChromeClient.FileChooserParams fileChooserParams) works on Android 5.0 (API level 21) and above
+You can use a library that abstracts this away and takes care of all these callbacks on different platform levels so that it just works.
+
+The fact that it's undocumented just means that you can't rely on it. When it was introduced in Android 2.2, nobody could know that it would stop working in Android 4.4, but you had to accept it.
+</code></pre>
+
+<p>之后测试了几个4.4-5.0直间的设备并没有发现问题，可能国内厂商对系统做了处理吧，没有试原生系统在4.4-5.0区间是否真的有问题，感兴趣的可以试试。</p>
+</div>
+
+</article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style addthis_16x16_style">
+	
+	
+	
+	
+	
+	<a class="addthis_button_compact"></a>
+	<a class="addthis_counter addthis_bubble_style"></a>
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/300/addthis_widget.js#pubid="></script>
+</div>
+
+
+
+  <section>
+    <h1>评论</h1>
+    <div id="comments" aria-live="polite"><!-- Duoshuo Comment BEGIN -->
+<div class="ds-thread"></div>
+<script type="text/javascript">
+  var duoshuoQuery = {short_name:"pffair"};
+  (function() {
+    var ds = document.createElement('script');
+    ds.type = 'text/javascript';ds.async = true;
+    ds.src = 'http://static.duoshuo.com/embed.js';
+    ds.charset = 'UTF-8';
+    (document.getElementsByTagName('head')[0] 
+    || document.getElementsByTagName('body')[0]).appendChild(ds);
+  })();
+</script>
+<!-- Duoshuo Comment END --></div>
+  </section>
+</div>
+			</div>
+			<footer id="footer" class="inner">Copyright &copy; 2021
+
+    pangff
+
+<a href="https://beian.miit.gov.cn/">京ICP备14050056号-1</a>
+
+Design credit: <a href="http://shashankmehta.in/archive/2012/greyshade.html">Shashank Mehta</a>
+<script type="text/javascript">
+var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_1000501877'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s4.cnzz.com/z_stat.php%3Fid%3D1000501877%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));
+</script></footer>
+			<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-52176210-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+		</div>
+	</div>
+</body>
+</html>

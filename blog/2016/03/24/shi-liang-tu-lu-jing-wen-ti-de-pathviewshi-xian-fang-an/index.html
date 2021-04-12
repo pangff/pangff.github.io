@@ -1,0 +1,245 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>矢量图路径问题的pathview实现方案 - Pangff's Blog</title>
+	<meta name="author" content="pangff">
+
+	
+	<meta name="description" content="矢量图路径问题的pathview实现方案 在前面博客关于矢量路线图动态路径在Android实现方案中，根据一些资料简单制定了一些实现方案，该文简单介绍下pathview方案的实现过程 先上图看下最终的效果 实现思路 运行了android-pathview项目 &hellip;">
+	
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="baidu-site-verification" content="4uVEsGeeHG" />
+  <meta name="google-site-verification" content="RF1uUMXanCzUMdaFqAcD1EUdurAKJag8L8CqWylzCb0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="Pangff's Blog" type="application/atom+xml">
+	
+	<link rel="canonical" href="http://www.pffair.com/blog/2016/03/24/shi-liang-tu-lu-jing-wen-ti-de-pathviewshi-xian-fang-an/">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700' rel='stylesheet' type='text/css'>
+	
+</head>
+
+
+<body>
+	<div class="container">
+		<div class="left-col">
+			<div class="intrude-less">
+			<header id="header" class="inner"><div class="profilepic">	
+	<script src="/javascripts/md5.js"></script>
+	<script type="text/javascript">
+		document.write("<img src='/images/avatar.jpg' alt='Profile Picture' style='width: 160px;' />");
+	</script>
+</div>
+<h1><a href="/">Pangff's Blog</a></h1>
+<p class="subtitle">stay foolish stay hungry.</p>
+<nav id="main-nav">
+<form action="http://www.pffair.com/search" method="get">
+    <input class="search" name="query" type="text" placeholder="Search..."/>
+</form>
+
+<ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+	<li><a href="/about">About</a></li>
+</ul>
+</nav>
+<nav id="sub-nav">
+	<div class="social">
+		
+		
+		
+		
+		
+		<a class="github" href="https://github.com/pangff" title="GitHub">GitHub</a>
+		
+		
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</nav>
+<gcse:search></gcse:search>
+<section>
+  <h1></h1>
+  <ul id="categories">
+    <li class='category'><a href='/blog/categories/3d/'>3d (3)</a></li>
+<li class='category'><a href='/blog/categories/android/'>android (26)</a></li>
+<li class='category'><a href='/blog/categories/docker/'>docker (6)</a></li>
+<li class='category'><a href='/blog/categories/filechooser/'>filechooser (1)</a></li>
+<li class='category'><a href='/blog/categories/js/'>js (1)</a></li>
+<li class='category'><a href='/blog/categories/pathview/'>pathview (1)</a></li>
+<li class='category'><a href='/blog/categories/pdf/'>pdf (1)</a></li>
+<li class='category'><a href='/blog/categories/react/'>react (1)</a></li>
+<li class='category'><a href='/blog/categories/redux/'>redux (1)</a></li>
+<li class='category'><a href='/blog/categories/svg/'>svg (2)</a></li>
+<li class='category'><a href='/blog/categories/tomcat/'>tomcat (1)</a></li>
+<li class='category'><a href='/blog/categories/turn/'>turn (1)</a></li>
+<li class='category'><a href='/blog/categories/vectordrawable/'>vectordrawable (1)</a></li>
+<li class='category'><a href='/blog/categories/webrtc/'>webrtc (1)</a></li>
+<li class='category'><a href='/blog/categories/webview/'>webview (1)</a></li>
+<li class='category'><a href='/blog/categories/bei-wang/'>备忘 (3)</a></li>
+<li class='category'><a href='/blog/categories/xing-neng-you-hua/'>性能优化 (2)</a></li>
+<li class='category'><a href='/blog/categories/fu-wu-duan/'>服务端 (1)</a></li>
+<li class='category'><a href='/blog/categories/shi-liang-tu/'>矢量图 (1)</a></li>
+
+  </ul>
+</section>
+
+
+</header>				
+			</div>
+		</div>	
+		<div class="mid-col">
+			
+				
+			
+			<div class="mid-col-container">
+				<div id="content" class="inner"><article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+	<h1 class="title" itemprop="name">矢量图路径问题的pathview实现方案</h1>
+	<div class="entry-content" itemprop="articleBody"><p>在前面博客<a href="http://www.pffair.com/blog/categories/svg/">关于矢量路线图动态路径在Android实现方案</a>中，根据一些资料简单制定了一些实现方案，该文简单介绍下pathview方案的实现过程</p>
+
+<!--more-->
+
+
+<h4>先上图看下最终的效果</h4>
+
+<p><img src="http://www.pffair.com/images/48.png" alt="初始化" />
+<img src="http://www.pffair.com/images/49.png" alt="点击高亮显示指定路径后" /></p>
+
+<h3>实现思路</h3>
+
+<p>运行了<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a> 了解到该项目实现了在svg图上进行路径绘制的效果，因此根据android-pathview项目的源码能找到实现思路。看过<a href="https://github.com/geftimov/android-pathview">android-pathview</a> 项目源码后，发现要走的路还很长。</p>
+
+<h4>android-pathview项目的实现思路</h4>
+
+<ul>
+<li>基于<a href="https://github.com/BigBadaboom/androidsvg">androidsvg</a> 之上，自定义Pathview模拟加载svg资源到自定义canvas，为什么叫模拟加载，其实Canvas是new出来的并没有真正渲染到视图上</li>
+<li>通过重写Canvas的drawPath方法后可以获取到的svg元素解析后的path路径(androidsvg实现)</li>
+<li>将获取到的path添加到一个list中</li>
+<li>重新绘制Pathview,(onDraw方法中遍历path绘制，之后正常绘制svg)</li>
+<li>当然其中还有一些动画方面的东西，忽略不提。</li>
+</ul>
+
+
+<h4>问题</h4>
+
+<ul>
+<li>我要实现svg图的缩放、移动<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a>不支持怎么破？</li>
+<li>我要实现指定路径绘制，注意是指定，而<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a>是全部path都会获取到并绘制，怎么破？</li>
+<li>我要实现svg图层元素的点击并响应，<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a>不支持，怎么破？</li>
+</ul>
+
+
+<h4>思考</h4>
+
+<ul>
+<li>图形缩放、移动；发现了<a href="https://github.com/geftimov/android-pathview">android-pathview项目</a>的SvgUtils rescaleCanvas方法，改方法是做svg图形的渲染，这部分作者做了canvas的移动和缩放。那么我们可以考虑在该方法加入canvas的移动缩放的外部控制，那么图的缩放移动就实现了。最终实践后确认可以</li>
+<li>绘制指定路径，实现元素点击，他们共同的一个问题就是需要svg元素和解析后的path对应。这样我通过输入svg元素的id就能找到它解析后对应的path做指定路径的绘制，通过点击path我就能知道是哪个对应的svg元素被点击了并作出相应的处理。所以对应必须实现。</li>
+<li>在点击事件中有面临的一个问题是，如何判断点击位置是哪个path呢。这个通过Region不难实现</li>
+</ul>
+
+
+<h4>实现</h4>
+
+<ul>
+<li>关于移动部分的实现和path点击事件处理就不多说了</li>
+<li>重点说下svg元素和path的对应解决方法，为了不再花大量时间去阅读<a href="https://github.com/BigBadaboom/androidsvg">androidsvg</a>的代码看svg到android graphics的渲染，我想到的最快的解决方案（当然不一定是好的）是按顺序去对应。经过测试果然drawPath的绘制和svg元素在文档中出现的顺序是一致的（canvas没有做特殊设置，因为不能确定canvase或对齐方式有变化时会不会有影响），那么我们是不是可以根据顺序就能确定该path对应svg的元素呢，答案是肯定的。</li>
+<li>当然不能忽略的一件事是如何顺序获取到svg的全部元素节点，通过简单浏览<a href="https://github.com/BigBadaboom/androidsvg">androidsvg</a>代码发现了getElementsByTagName这个方法（但是它是protected方法，不得已将androidsvg源码拿了过来放到相同包下），它可以根据svg元素类型去搜索到全部该类型的SvgObject。根据我测试的svg文件，发现节点元素渲染成path的有Ellipse、Circle、Path三种，所以我按顺序对svg文件进行了整理，将相同类型元素放在一起，整体按组Ellipse－Circle－Path放置。那么就可以做到在drawPath方法中取得的svg元素和path一一对应，之后存入一个LinkedHashMap中。</li>
+<li>拿到了svg节点和path的对应，那么绘制和事件对应就没有问题了</li>
+</ul>
+
+
+<h4>代码实现</h4>
+
+<p>(<a href="https://github.com/pangff/pff-lib">https://github.com/pangff/pff-lib</a>) 中的VectorPathView部分。
+个人认为实现方式不是很好，而且要求svg规则有序,有想法的同学欢迎指正</p>
+</div>
+
+</article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style addthis_16x16_style">
+	
+	
+	
+	
+	
+	<a class="addthis_button_compact"></a>
+	<a class="addthis_counter addthis_bubble_style"></a>
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/300/addthis_widget.js#pubid="></script>
+</div>
+
+
+
+  <section>
+    <h1>评论</h1>
+    <div id="comments" aria-live="polite"><!-- Duoshuo Comment BEGIN -->
+<div class="ds-thread"></div>
+<script type="text/javascript">
+  var duoshuoQuery = {short_name:"pffair"};
+  (function() {
+    var ds = document.createElement('script');
+    ds.type = 'text/javascript';ds.async = true;
+    ds.src = 'http://static.duoshuo.com/embed.js';
+    ds.charset = 'UTF-8';
+    (document.getElementsByTagName('head')[0] 
+    || document.getElementsByTagName('body')[0]).appendChild(ds);
+  })();
+</script>
+<!-- Duoshuo Comment END --></div>
+  </section>
+</div>
+			</div>
+			<footer id="footer" class="inner">Copyright &copy; 2021
+
+    pangff
+
+<a href="https://beian.miit.gov.cn/">京ICP备14050056号-1</a>
+
+Design credit: <a href="http://shashankmehta.in/archive/2012/greyshade.html">Shashank Mehta</a>
+<script type="text/javascript">
+var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_1000501877'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s4.cnzz.com/z_stat.php%3Fid%3D1000501877%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));
+</script></footer>
+			<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-52176210-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+		</div>
+	</div>
+</body>
+</html>

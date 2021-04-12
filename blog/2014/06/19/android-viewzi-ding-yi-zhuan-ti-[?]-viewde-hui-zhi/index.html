@@ -1,0 +1,418 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Android View自定义专题一 (view的绘制) - Pangff's Blog</title>
+	<meta name="author" content="pangff">
+
+	
+	<meta name="description" content="Android View自定义专题一 (View的绘制) 项目中经常会有一些特殊的需求，而这些需求往往skd中的原生view控件不能或很难满足，这时候就需要我们自定义一些view来满足需求。
+下面来介绍下如何进行view自定义(绘制部分) 一、首先要了解view的绘制机制（onMeasure－ &hellip;">
+	
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="baidu-site-verification" content="4uVEsGeeHG" />
+  <meta name="google-site-verification" content="RF1uUMXanCzUMdaFqAcD1EUdurAKJag8L8CqWylzCb0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="Pangff's Blog" type="application/atom+xml">
+	
+	<link rel="canonical" href="http://www.pffair.com/blog/2014/06/19/android-viewzi-ding-yi-zhuan-ti-%5B%3F%5D-viewde-hui-zhi/">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700' rel='stylesheet' type='text/css'>
+	
+</head>
+
+
+<body>
+	<div class="container">
+		<div class="left-col">
+			<div class="intrude-less">
+			<header id="header" class="inner"><div class="profilepic">	
+	<script src="/javascripts/md5.js"></script>
+	<script type="text/javascript">
+		document.write("<img src='/images/avatar.jpg' alt='Profile Picture' style='width: 160px;' />");
+	</script>
+</div>
+<h1><a href="/">Pangff's Blog</a></h1>
+<p class="subtitle">stay foolish stay hungry.</p>
+<nav id="main-nav">
+<form action="http://www.pffair.com/search" method="get">
+    <input class="search" name="query" type="text" placeholder="Search..."/>
+</form>
+
+<ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+	<li><a href="/about">About</a></li>
+</ul>
+</nav>
+<nav id="sub-nav">
+	<div class="social">
+		
+		
+		
+		
+		
+		<a class="github" href="https://github.com/pangff" title="GitHub">GitHub</a>
+		
+		
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</nav>
+<gcse:search></gcse:search>
+<section>
+  <h1></h1>
+  <ul id="categories">
+    <li class='category'><a href='/blog/categories/3d/'>3d (3)</a></li>
+<li class='category'><a href='/blog/categories/android/'>android (26)</a></li>
+<li class='category'><a href='/blog/categories/docker/'>docker (6)</a></li>
+<li class='category'><a href='/blog/categories/filechooser/'>filechooser (1)</a></li>
+<li class='category'><a href='/blog/categories/js/'>js (1)</a></li>
+<li class='category'><a href='/blog/categories/pathview/'>pathview (1)</a></li>
+<li class='category'><a href='/blog/categories/pdf/'>pdf (1)</a></li>
+<li class='category'><a href='/blog/categories/react/'>react (1)</a></li>
+<li class='category'><a href='/blog/categories/redux/'>redux (1)</a></li>
+<li class='category'><a href='/blog/categories/svg/'>svg (2)</a></li>
+<li class='category'><a href='/blog/categories/tomcat/'>tomcat (1)</a></li>
+<li class='category'><a href='/blog/categories/turn/'>turn (1)</a></li>
+<li class='category'><a href='/blog/categories/vectordrawable/'>vectordrawable (1)</a></li>
+<li class='category'><a href='/blog/categories/webrtc/'>webrtc (1)</a></li>
+<li class='category'><a href='/blog/categories/webview/'>webview (1)</a></li>
+<li class='category'><a href='/blog/categories/bei-wang/'>备忘 (3)</a></li>
+<li class='category'><a href='/blog/categories/xing-neng-you-hua/'>性能优化 (2)</a></li>
+<li class='category'><a href='/blog/categories/fu-wu-duan/'>服务端 (1)</a></li>
+<li class='category'><a href='/blog/categories/shi-liang-tu/'>矢量图 (1)</a></li>
+
+  </ul>
+</section>
+
+
+</header>				
+			</div>
+		</div>	
+		<div class="mid-col">
+			
+				
+			
+			<div class="mid-col-container">
+				<div id="content" class="inner"><article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+	<h1 class="title" itemprop="name">Android View自定义专题一 (View的绘制)</h1>
+	<div class="entry-content" itemprop="articleBody"><p>项目中经常会有一些特殊的需求，而这些需求往往skd中的原生view控件不能或很难满足，这时候就需要我们自定义一些view来满足需求。
+下面来介绍下如何进行view自定义(绘制部分)
+ <!--more--></p>
+
+<h4>一、首先要了解view的绘制机制（onMeasure－onLayout－onDraw）</h4>
+
+<ul>
+<li> onMeasure是来衡量自身和其子view大小的，从父级开始每一级的onMeasure完成后会将自身的宽高信息纪录下来（通过getMeasuredHeight、getMeasuredWidth获取）</li>
+<li> onLayout是来确定view以及其子view的位置的，从父级别开始每一级确定位置纪录下来（通过getLeft、getTop等获取）</li>
+<li> onDraw就比较好理解了，它是用来绘制视图的</li>
+</ul>
+
+
+<p>如下图，为多层view架构下onMeasure－onLayout的调用方式</p>
+
+<p><img src="http://www.pffair.com/images/1.png" alt="onMeasure－onLayout的调用方式" /></p>
+
+<p>我们用三个层叠view为例，其调用顺序为:</p>
+
+<ul>
+<li> 调用第一级的(onMeasure)&mdash;第二级的(onMeasure)&mdash;第三级的(onMeasure)&mdash;第三级(onMeasure返回)&mdash;第二级(onMeasure返回)&mdash;第一级(onMeasure返回)</li>
+<li> 之后调用第一级的(onLayout)&mdash;第二级(onLayout)&mdash;第三级(onLayout)&mdash;第三级的(onLayout返回)&mdash;第二级(onLayout返回)&mdash;第一级(onLayout返回)</li>
+<li> 最后调用第一级的(onDraw)&mdash;第二级(onDraw)&mdash;第三级(onDraw)&mdash;第三级的(onDraw返回)&mdash;第二级(onDraw返回)&mdash;第一级(onDraw返回)［注意如果view是ViewGroup那么应该是dispatchDraw］</li>
+</ul>
+
+
+<p>值得注意的是MeasureSpecs，它是父级别view测量该子view时的标尺。有三种模式(UNSPECIFIED、EXACTLY、AT_MOST)</p>
+
+<ul>
+<li> UNSPECIFIED：通过xml布局不会出现，一般是用来作试探性的测量，比如设置高为UNSPECIFIED、宽为固定的240dp去衡量子视图，子视图可以根据固定的240宽去计算需要多高的空间</li>
+<li> EXACTLY：xml中设置为match_parent或具体的数值时会使用，父级别来限制</li>
+<li> AT_MOST：xml中设置为wrap_content时会使用，不要求父级别来加以限制</li>
+</ul>
+
+
+<p>通过事例程序可以从日志中获取以上信息，参考事例:<a href="https://github.com/pangff/customview">https://github.com/pangff/customview</a></p>
+
+<h4>二、我们模仿官方的LableView来进行一个简单view(不涉及ViewGroup)的绘制－－－不换行的textview</h4>
+
+<p>首先继承View添加构造方法</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">MyView</span> <span class="kd">extends</span> <span class="n">View</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'> <span class="kd">private</span> <span class="n">Paint</span> <span class="n">mTextPaint</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'> <span class="kd">private</span> <span class="n">String</span> <span class="n">mText</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'> <span class="kd">private</span> <span class="kt">int</span> <span class="n">mAscent</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'> <span class="kd">public</span> <span class="nf">MyView</span><span class="o">(</span><span class="n">Context</span> <span class="n">context</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'> <span class="kd">super</span><span class="o">(</span><span class="n">context</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'> <span class="n">initLabelView</span><span class="o">();</span>
+</span><span class='line'>
+</span><span class='line'> <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'> <span class="kd">public</span> <span class="nf">MyView</span><span class="o">(</span><span class="n">Context</span> <span class="n">context</span><span class="o">,</span> <span class="n">AttributeSet</span> <span class="n">attrs</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'> <span class="kd">super</span><span class="o">(</span><span class="n">context</span><span class="o">,</span> <span class="n">attrs</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'> <span class="n">initLabelView</span><span class="o">();</span>
+</span><span class='line'>
+</span><span class='line'> <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>其次重写onMeasure</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="nd">@Override</span>
+</span><span class='line'><span class="kd">protected</span> <span class="kt">void</span> <span class="nf">onMeasure</span><span class="o">(</span><span class="kt">int</span> <span class="n">widthMeasureSpec</span><span class="o">,</span> <span class="kt">int</span> <span class="n">heightMeasureSpec</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>        <span class="c1">//作为叶子节点的view必须setMeasureDimesion否则抛异常</span>
+</span><span class='line'>        <span class="c1">//（或者调用super.onMeasure(w,h);但是对于子view调用super.onMeasure(w,h)无意义）</span>
+</span><span class='line'>    <span class="n">setMeasuredDimension</span><span class="o">(</span><span class="n">measureWidth</span><span class="o">(</span><span class="n">widthMeasureSpec</span><span class="o">),</span><span class="n">measureHeight</span><span class="o">(</span><span class="n">heightMeasureSpec</span><span class="o">));</span>
+</span><span class='line'><span class="o">}</span>
+</span><span class='line'><span class="cm">/**</span>
+</span><span class='line'><span class="cm">* 计算view的宽度</span>
+</span><span class='line'><span class="cm">* @param measureSpec</span>
+</span><span class='line'><span class="cm">* @return</span>
+</span><span class='line'><span class="cm"> */</span>
+</span><span class='line'><span class="kd">private</span> <span class="kt">int</span> <span class="nf">measureWidth</span><span class="o">(</span><span class="kt">int</span> <span class="n">measureSpec</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">result</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">specMode</span> <span class="o">=</span> <span class="n">MeasureSpec</span><span class="o">.</span><span class="na">getMode</span><span class="o">(</span><span class="n">measureSpec</span><span class="o">);</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">specSize</span> <span class="o">=</span> <span class="n">MeasureSpec</span><span class="o">.</span><span class="na">getSize</span><span class="o">(</span><span class="n">measureSpec</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="o">(</span><span class="n">specMode</span> <span class="o">==</span> <span class="n">MeasureSpec</span><span class="o">.</span><span class="na">EXACTLY</span><span class="o">)</span> <span class="o">{</span><span class="c1">//match_parent或具体数值,直接使用</span>
+</span><span class='line'> <span class="n">result</span> <span class="o">=</span> <span class="n">specSize</span><span class="o">;</span>
+</span><span class='line'><span class="o">}</span> <span class="k">else</span> <span class="o">{</span><span class="c1">//否则自己计算</span>
+</span><span class='line'> <span class="c1">// 计算文字宽度</span>
+</span><span class='line'> <span class="n">result</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="n">mTextPaint</span><span class="o">.</span><span class="na">measureText</span><span class="o">(</span><span class="n">mText</span><span class="o">)</span> <span class="o">+</span> <span class="n">getPaddingLeft</span><span class="o">()+</span> <span class="n">getPaddingRight</span><span class="o">();</span>
+</span><span class='line'> <span class="k">if</span> <span class="o">(</span><span class="n">specMode</span> <span class="o">==</span> <span class="n">MeasureSpec</span><span class="o">.</span><span class="na">AT_MOST</span><span class="o">)</span> <span class="o">{</span><span class="c1">//wrap_content</span>
+</span><span class='line'>     <span class="c1">//取specSize和计算出的文字宽度最小数值，如果result大于specSize说明文字超出了view宽度范围</span>
+</span><span class='line'>     <span class="n">result</span> <span class="o">=</span> <span class="n">Math</span><span class="o">.</span><span class="na">min</span><span class="o">(</span><span class="n">result</span><span class="o">,</span> <span class="n">specSize</span><span class="o">);</span>
+</span><span class='line'> <span class="o">}</span>
+</span><span class='line'><span class="o">}</span>
+</span><span class='line'><span class="k">return</span> <span class="n">result</span><span class="o">;</span>
+</span><span class='line'><span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'><span class="cm">/**</span>
+</span><span class='line'><span class="cm">* 计算view的高度</span>
+</span><span class='line'><span class="cm">* @param measureSpec</span>
+</span><span class='line'><span class="cm">* @return</span>
+</span><span class='line'><span class="cm"> */</span>
+</span><span class='line'><span class="kd">private</span> <span class="kt">int</span> <span class="nf">measureHeight</span><span class="o">(</span><span class="kt">int</span> <span class="n">measureSpec</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">result</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">specMode</span> <span class="o">=</span> <span class="n">MeasureSpec</span><span class="o">.</span><span class="na">getMode</span><span class="o">(</span><span class="n">measureSpec</span><span class="o">);</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">specSize</span> <span class="o">=</span> <span class="n">MeasureSpec</span><span class="o">.</span><span class="na">getSize</span><span class="o">(</span><span class="n">measureSpec</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">mAscent</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="n">mTextPaint</span><span class="o">.</span><span class="na">ascent</span><span class="o">();</span>
+</span><span class='line'>    <span class="k">if</span> <span class="o">(</span><span class="n">specMode</span> <span class="o">==</span> <span class="n">MeasureSpec</span><span class="o">.</span><span class="na">EXACTLY</span><span class="o">)</span> <span class="o">{</span><span class="c1">//match_parent或具体数值,直接使用</span>
+</span><span class='line'>        <span class="n">result</span> <span class="o">=</span> <span class="n">specSize</span><span class="o">;</span>
+</span><span class='line'>    <span class="o">}</span> <span class="k">else</span> <span class="o">{</span><span class="c1">//否则自己计算</span>
+</span><span class='line'>        <span class="c1">// 计算文字高度</span>
+</span><span class='line'>        <span class="n">result</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="o">(-</span><span class="n">mAscent</span> <span class="o">+</span> <span class="n">mTextPaint</span><span class="o">.</span><span class="na">descent</span><span class="o">())</span> <span class="o">+</span> <span class="n">getPaddingTop</span><span class="o">()</span> <span class="o">+</span> <span class="n">getPaddingBottom</span><span class="o">();</span>
+</span><span class='line'>        <span class="k">if</span> <span class="o">(</span><span class="n">specMode</span> <span class="o">==</span> <span class="n">MeasureSpec</span><span class="o">.</span><span class="na">AT_MOST</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>            <span class="c1">//取specSize和计算出的文字高度最小数值，如果result大于specSize说明文字超出了view高度范围</span>
+</span><span class='line'>            <span class="n">result</span> <span class="o">=</span> <span class="n">Math</span><span class="o">.</span><span class="na">min</span><span class="o">(</span><span class="n">result</span><span class="o">,</span> <span class="n">specSize</span><span class="o">);</span>
+</span><span class='line'>        <span class="o">}</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="n">result</span><span class="o">;</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="n">最后绘制</span>
+</span><span class='line'>
+</span><span class='line'><span class="cm">/**</span>
+</span><span class='line'><span class="cm">* 绘制视图</span>
+</span><span class='line'><span class="cm">*/</span>
+</span><span class='line'><span class="nd">@Override</span>
+</span><span class='line'><span class="kd">protected</span> <span class="kt">void</span> <span class="nf">onDraw</span><span class="o">(</span><span class="n">Canvas</span> <span class="n">canvas</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="kd">super</span><span class="o">.</span><span class="na">onDraw</span><span class="o">(</span><span class="n">canvas</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">canvas</span><span class="o">.</span><span class="na">drawText</span><span class="o">(</span><span class="n">mText</span><span class="o">,</span> <span class="n">getPaddingLeft</span><span class="o">(),</span> <span class="n">getPaddingTop</span><span class="o">()</span> <span class="o">-</span> <span class="n">mAscent</span><span class="o">,</span><span class="n">mTextPaint</span><span class="o">);</span>
+</span><span class='line'><span class="o">});</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+</div>
+
+</article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style addthis_16x16_style">
+	
+	
+	
+	
+	
+	<a class="addthis_button_compact"></a>
+	<a class="addthis_counter addthis_bubble_style"></a>
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/300/addthis_widget.js#pubid="></script>
+</div>
+
+
+
+  <section>
+    <h1>评论</h1>
+    <div id="comments" aria-live="polite"><!-- Duoshuo Comment BEGIN -->
+<div class="ds-thread"></div>
+<script type="text/javascript">
+  var duoshuoQuery = {short_name:"pffair"};
+  (function() {
+    var ds = document.createElement('script');
+    ds.type = 'text/javascript';ds.async = true;
+    ds.src = 'http://static.duoshuo.com/embed.js';
+    ds.charset = 'UTF-8';
+    (document.getElementsByTagName('head')[0] 
+    || document.getElementsByTagName('body')[0]).appendChild(ds);
+  })();
+</script>
+<!-- Duoshuo Comment END --></div>
+  </section>
+</div>
+			</div>
+			<footer id="footer" class="inner">Copyright &copy; 2021
+
+    pangff
+
+<a href="https://beian.miit.gov.cn/">京ICP备14050056号-1</a>
+
+Design credit: <a href="http://shashankmehta.in/archive/2012/greyshade.html">Shashank Mehta</a>
+<script type="text/javascript">
+var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_1000501877'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s4.cnzz.com/z_stat.php%3Fid%3D1000501877%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));
+</script></footer>
+			<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+	<script type="text/javascript">
+		var _gaq = _gaq || [];
+		_gaq.push(['_setAccount', 'UA-52176210-1']);
+		_gaq.push(['_trackPageview']);
+
+		(function() {
+			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+		})();
+	</script>
+
+
+
+		</div>
+	</div>
+</body>
+</html>

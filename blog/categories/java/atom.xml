@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Category: tomcat | Pangff's Blog]]></title>
-  <link href="http://www.pffair.com/blog/categories/tomcat/atom.xml" rel="self"/>
+  <title><![CDATA[Category: java | Pangff's Blog]]></title>
+  <link href="http://www.pffair.com/blog/categories/java/atom.xml" rel="self"/>
   <link href="http://www.pffair.com/"/>
-  <updated>2021-05-04T21:22:48+08:00</updated>
+  <updated>2021-05-04T21:28:29+08:00</updated>
   <id>http://www.pffair.com/</id>
   <author>
     <name><![CDATA[pangff]]></name>

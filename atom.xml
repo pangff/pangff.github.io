@@ -4,7 +4,7 @@
   <title><![CDATA[Pangff's Blog]]></title>
   <link href="http://www.pffair.com/atom.xml" rel="self"/>
   <link href="http://www.pffair.com/"/>
-  <updated>2021-05-04T21:28:29+08:00</updated>
+  <updated>2021-05-04T23:07:36+08:00</updated>
   <id>http://www.pffair.com/</id>
   <author>
     <name><![CDATA[pangff]]></name>
@@ -349,7 +349,7 @@
 <p>安装docker-compose</p>
 
 <figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>sudo apt-get  install docker-compose</span></code></pre></td></tr></table></div></figure>
+</pre></td><td class='code'><pre><code class=''><span class='line'>pip3  install docker-compose=1.29.1</span></code></pre></td></tr></table></div></figure>
 
 
 <p>查看版本</p>

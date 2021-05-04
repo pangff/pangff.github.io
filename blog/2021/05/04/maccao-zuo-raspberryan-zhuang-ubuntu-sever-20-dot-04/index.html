@@ -430,7 +430,11 @@ diskutil list 确认下哪一个是要烧录系统的内存卡（ &hellip;">
 <p>安装docker-compose</p>
 
 <figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>pip3  install docker-compose=1.29.1</span></code></pre></td></tr></table></div></figure>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo pip3  install docker-compose=1.29.1
+</span><span class='line'>
+</span><span class='line'>sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose</span></code></pre></td></tr></table></div></figure>
 
 
 <p>查看版本</p>

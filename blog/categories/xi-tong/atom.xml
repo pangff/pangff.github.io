@@ -4,7 +4,7 @@
   <title><![CDATA[Category: 系统 | Pangff's Blog]]></title>
   <link href="http://www.pffair.com/blog/categories/xi-tong/atom.xml" rel="self"/>
   <link href="http://www.pffair.com/"/>
-  <updated>2021-05-04T23:07:36+08:00</updated>
+  <updated>2021-05-04T23:22:25+08:00</updated>
   <id>http://www.pffair.com/</id>
   <author>
     <name><![CDATA[pangff]]></name>
@@ -236,6 +236,8 @@ focal
 <span class='line-number'>7</span>
 <span class='line-number'>8</span>
 <span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
 </pre></td><td class='code'><pre><code class=''><span class='line'>sudo apt-get install -y libffi-dev libssl-dev&lt;/p&gt;
 </span><span class='line'>
 </span><span class='line'>&lt;p&gt;sudo apt-get install -y python3 python3-pip&lt;/p&gt;
@@ -244,7 +246,9 @@ focal
 </span><span class='line'>安装docker-compose
 </span><span class='line'>&lt;/code&gt;&lt;/pre&gt;
 </span><span class='line'>
-</span><span class='line'>&lt;p&gt;pip3  install docker-compose=1.29.1</span></code></pre></td></tr></table></div></figure></p>
+</span><span class='line'>&lt;p&gt;sudo pip3  install docker-compose=1.29.1&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose</span></code></pre></td></tr></table></div></figure></p>
 
 <p>查看版本
 <code>

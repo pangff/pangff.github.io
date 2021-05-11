@@ -3,7 +3,7 @@ layout: post
 title: "关于矢量路线图动态路径在Android实现方案"
 date: 2016-03-11 12:00:42 +0800
 comments: true
-categories: svg Android VectorDrawable
+categories: Android
 ---
 
 最近遇到svg路线图渲染问题，查一些资料总结下解决方案

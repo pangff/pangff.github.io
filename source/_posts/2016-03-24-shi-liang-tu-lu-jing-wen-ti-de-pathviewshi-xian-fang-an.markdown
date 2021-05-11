@@ -3,7 +3,7 @@ layout: post
 title: "矢量图路径问题的pathview实现方案"
 date: 2016-03-24 13:45:54 +0800
 comments: true
-categories: Android pathview svg 矢量图
+categories: Android
 ---
 在前面博客[关于矢量路线图动态路径在Android实现方案](http://www.pffair.com/blog/categories/svg/)中，根据一些资料简单制定了一些实现方案，该文简单介绍下pathview方案的实现过程
 <!--more-->

@@ -3,7 +3,7 @@ layout: post
 title: "WebView图片上传的各种坑"
 date: 2016-04-01 15:56:05 +0800
 comments: true
-categories: Android WebView FileChooser
+categories: Android
 ---
 最近项目用到了应用内webview图片上传，虽然最终实现了，但是遇到了各种坑，抽时间总结一下。
 <!--more-->

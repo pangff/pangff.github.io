@@ -3,7 +3,7 @@ layout: post
 title: "React+Redux learn"
 date: 2016-05-17 21:33:55 +0800
 comments: true
-categories: react redux
+categories: js
 ---
 之前一直想尝试react苦于没有时间。最近有前端项目用到所以简单学习总结一下。
 先看一个react的[hello world](https://github.com/pangff/react-redux-learn/blob/master/demo01/index.html)

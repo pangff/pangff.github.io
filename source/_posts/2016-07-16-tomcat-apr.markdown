@@ -3,7 +3,7 @@ layout: post
 title: "tomcat https"
 date: 2016-07-16 19:41:31 +0800
 comments: true
-categories: tomcat
+categories: java
 ---
 https也就是经过ssl加密的http，配置tomcat支持https协议其实就是tomcat SSL/TSL相关信息的配置实现。以下配置均在ubuntu环境下...
 

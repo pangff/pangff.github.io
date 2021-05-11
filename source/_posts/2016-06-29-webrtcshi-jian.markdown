@@ -3,7 +3,7 @@ layout: post
 title: "webrtc实践"
 date: 2016-06-29 15:21:47 +0800
 comments: true
-categories: WebRTC TURN
+categories: WebRTC
 ---
 最近了解了下WebRTC，并使用SimpleWebRTC做了个简单demo，记录下实践过程以及遇到的一些问题。
 

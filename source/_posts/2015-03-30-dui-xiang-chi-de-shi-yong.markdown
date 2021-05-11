@@ -3,7 +3,7 @@ layout: post
 title: "对象池的使用"
 date: 2015-03-30 10:38:04 +0800
 comments: true
-categories: [Android, 性能优化]
+categories: [Android]
 ---
 
 在android开发中经常会发现当日志中出现大量GC时我们的应用常常出现卡顿。这是因为当虚拟机进行垃圾回收操作时应用所有线程都会暂停，完成后恢复。如果出现大量GC操作时主线程频繁暂停就会影响应用性能了。所以我们在开发中要尽量避免。

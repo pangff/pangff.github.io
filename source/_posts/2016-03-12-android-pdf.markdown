@@ -3,7 +3,7 @@ layout: post
 title: "Android打开pdf文件"
 date: 2016-03-12 17:54:51 +0800
 comments: true
-categories: Android pdf
+categories: Android
 ---
 项目中有个阅读pdf的需求，总结下几种方案
 <!--more-->

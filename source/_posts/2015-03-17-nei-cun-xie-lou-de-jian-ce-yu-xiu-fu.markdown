@@ -3,7 +3,7 @@ layout: post
 title: "内存泄漏的监测与修复"
 date: 2015-03-17 15:52:06 +0800
 comments: true
-categories: [Android, 性能优化]
+categories: [Android]
 ---
 
 在android开发中，我们经常会遇到OutOfMemory的问题。有的由于listview中没有通过ViewHolder复用item，有的由于图片过大没有压缩，当然最多的还是由于我们在开发中不小心造成的内存泄漏。结合本人的开发经验，下面我们来重点看下如何监测我们的内存泄漏问题以及如何定位解决它。

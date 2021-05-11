@@ -3,7 +3,7 @@ layout: post
 title: "使用Rajawali加载外部模型及其纹理贴图的步骤"
 date: 2014-06-19 16:10:14 +0800
 comments: true
-categories: Android 3D
+categories: Android
 ---
 一、下载要加载的模型（我下载的是一个比较简单模型，地址<http://tf3dm.com/3d-model/doomsday-52515.html>）
 <!--more-->

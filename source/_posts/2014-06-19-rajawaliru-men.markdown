@@ -3,7 +3,7 @@ layout: post
 title: "Rajawali入门"
 date: 2014-06-19 16:05:10 +0800
 comments: true
-categories: Android 3D
+categories: Android
 ---
 rajawali是Android OpenGL ES 2.0/3.0引擎。https://github.com/MasDennis/Rajawali
 

@@ -3,7 +3,7 @@ layout: post
 title: "使用Rajawali加载多纹理贴图的复杂模型"
 date: 2014-06-19 16:13:50 +0800
 comments: true
-categories: Android 3D
+categories: Android
 ---
 在上篇笔记中介绍了使用Rajawali加载外部模型的步骤以及注意事项，但是上篇中只加载了一个简单的少纹理贴图的模型，下面通过一个复杂模型的加载来说明多纹理贴图模型加载注意事项。
 

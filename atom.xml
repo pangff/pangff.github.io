@@ -4,7 +4,7 @@
   <title><![CDATA[Pangff's Blog]]></title>
   <link href="http://www.pffair.com/atom.xml" rel="self"/>
   <link href="http://www.pffair.com/"/>
-  <updated>2021-05-04T23:22:25+08:00</updated>
+  <updated>2021-05-11T15:40:50+08:00</updated>
   <id>http://www.pffair.com/</id>
   <author>
     <name><![CDATA[pangff]]></name>
@@ -12,6 +12,235 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[harbor v2.2.1安装及配置]]></title>
+    <link href="http://www.pffair.com/blog/2021/05/11/harbor-v2-dot-2-1an-zhuang-ji-pei-zhi/"/>
+    <updated>2021-05-11T15:30:09+08:00</updated>
+    <id>http://www.pffair.com/blog/2021/05/11/harbor-v2-dot-2-1an-zhuang-ji-pei-zhi</id>
+    <content type="html"><![CDATA[<p>记录下SLB（https-http)->docker-nginx->harbor-nginx->harbor的配置过程 harbor版本v2.2.1</p>
+
+<!--more-->
+
+
+<p>下载安装包</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>wget https://github.com/goharbor/harbor/releases/download/v2.2.1/harbor-online-installer-v2.2.1.tgz</span></code></pre></td></tr></table></div></figure>
+
+
+<p>解压缩</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>tar -xvf harbor-online-installer-v2.2.1.tgz
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>进入harbor目录</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>cd harbor</span></code></pre></td></tr></table></div></figure>
+
+
+<p>修改harbor.yml配置文件(hostname，注释https，修改密码)</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># Configuration file of Harbor
+</span><span class='line'>
+</span><span class='line'># The IP address or hostname to access admin UI and registry service.
+</span><span class='line'># DO NOT use localhost or 127.0.0.1, because Harbor needs to be accessed by external clients.
+</span><span class='line'>hostname: host
+</span><span class='line'># http related config
+</span><span class='line'>http:
+</span><span class='line'>  # port for http, default is 80. If https enabled, this port will redirect to https port
+</span><span class='line'>  port: 80
+</span><span class='line'>  relativeurls: true
+</span><span class='line'># https related config
+</span><span class='line'># https:
+</span><span class='line'>#   # https port for harbor, default is 443
+</span><span class='line'>#   port: 443
+</span><span class='line'>#   # The path of cert and key files for nginx
+</span><span class='line'>#   certificate: /your/certificate/path
+</span><span class='line'>#   private_key: /your/private/key/path
+</span><span class='line'>
+</span><span class='line'># internal_tls:
+</span><span class='line'>#   # set enabled to true means internal tls is enabled
+</span><span class='line'>#   enabled: true
+</span><span class='line'>#   # put your cert and key files on dir
+</span><span class='line'>#   dir: /etc/harbor/tls/internal
+</span><span class='line'>
+</span><span class='line'># Uncomment external_url if you want to enable external proxy
+</span><span class='line'># And when it enabled the hostname will no longer used
+</span><span class='line'>  external_url: https://host</span></code></pre></td></tr></table></div></figure>
+
+
+<p>由于前置nginx的反向代理，因此需要增加 relativeurls: true  、 external_url 配置</p>
+
+<p>运行安装脚本</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>./install.sh</span></code></pre></td></tr></table></div></figure>
+
+
+<p>安装过程中会自动在根创建docker-compose.yml文件并启动相应的container。因为我们之前 已有一个名字是nginx的容器，启动时会报错，提示nginx名称已被其他容器使用。 我们将相关启动容器停止，进行docker-compose.yml文件修改</p>
+
+<h3>停止相关容器</h3>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker-compose down -v</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>修改harbor/docker-compose.yml</h4>
+
+<p>修改nginxl配置</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>proxy:
+</span><span class='line'>  image: goharbor/nginx-photon:v2.2.1 container_name: harbor-nginx (nginx改成harbor-nginx) restart: always
+</span><span class='line'>   ....
+</span><span class='line'>  ports:
+</span><span class='line'>    - 9000:8080 端口也改下，80:8080改成9000:8080因为公共nginx已经使用80了
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>因为我们已经有了公共的nginx代理服务，所以并不打算直接从外部访问 harbor的nginx代理， 而是通过公共的nginx服务反响代理到harbor-nginx的 proxy。如果要在公共nginx中可以通过容 器名称直接访问到harbor-nginx，那么就需要他们都在同一个网络环境内，所以修改docker- compose.yml文件的网络名称为公共nginx对应网络名称，并配置使用外部网络</p>
+
+<p>修改网络配置</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>networks:
+</span><span class='line'>  ds-netwrok: (harbor名字改成了ds-network。docker-compose.yml其他部分使用了harbor网络的都要改成ds-network)
+</span><span class='line'>    external: true (false 改成 true代表使用外部已有的网络而不是再创建)</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>修改registry config</h4>
+
+<p>common/config/registry/config.yml http下增加 relativeurls配置</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>http:
+</span><span class='line'>  relativeurls: true</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>修改nginx配置</h4>
+
+<p>common/config/nginx/nginx.conf ，所有配置中注释以下语句</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'> proxy_set_header X-Forwarded-Proto $scheme;</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>修改core env</h4>
+
+<p>common/config/core/env</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>EXT_ENDPOINT=http://host</span></code></pre></td></tr></table></div></figure>
+
+
+<p>改为</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>
+</span><span class='line'>EXT_ENDPOINT=https://host
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>启动容器</h4>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>docker-compose up -d</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>前置nginx反向代理的配置(因为前面还有SLB负载均衡，SLB做了443到服务器80的监听配置，并前置了SSL证书，所以这里只需要80)</h3>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>server {
+</span><span class='line'>    listen 80;
+</span><span class='line'>    server_name host;
+</span><span class='line'>    client_max_body_size 100M;
+</span><span class='line'>    location / {
+</span><span class='line'>        resolver 127.0.0.11 ipv6=off;
+</span><span class='line'>        set $service_upstream "http://harbor-nginx:8080";
+</span><span class='line'>        proxy_set_header  Host              $http_host;
+</span><span class='line'>        proxy_set_header  X-Real-IP         $remote_addr;
+</span><span class='line'>        proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+</span><span class='line'>        proxy_set_header  X-Forwarded-Proto $scheme;
+</span><span class='line'>
+</span><span class='line'>        proxy_buffering off;
+</span><span class='line'>        proxy_request_buffering off;
+</span><span class='line'>
+</span><span class='line'>        # Fix the "It appears that your reverse proxy set up is broken" error.
+</span><span class='line'>        # proxy_read_timeout  90;
+</span><span class='line'>        proxy_pass $service_upstream;
+</span><span class='line'>    }
+</span><span class='line'>
+</span><span class='line'>    error_page   500 502 503 504  /50x.html;
+</span><span class='line'>    location = /50x.html {
+</span><span class='line'>        root   /usr/share/nginx/html;
+</span><span class='line'>    }
+</span><span class='line'>}</span></code></pre></td></tr></table></div></figure>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Mac操作Raspberry安装ubuntu sever 20.04]]></title>
@@ -3918,37 +4147,6 @@ rake deploy
 
 <pre><code>http://wowubuntu.com/markdown/
 </code></pre>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[趟Android L ]]></title>
-    <link href="http://www.pffair.com/blog/2014/07/24/tang-android-l-preview/"/>
-    <updated>2014-07-24T18:30:28+08:00</updated>
-    <id>http://www.pffair.com/blog/2014/07/24/tang-android-l-preview</id>
-    <content type="html"><![CDATA[<p>android L 发布一段时间了，抽时间趟了一下，做一下总结。</p>
-
-<!--more-->
-
-
-<ul>
-<li>环境变化，最大变化就是虚拟机从Dalvik变为了ART(在4.3已经引入，但是androidL已经作为默认运行环境)</li>
-<li>ART采用预编译（接收dex文件输入，输出目标机器可执行文件），速度当然要比Dalvik快，同时在垃圾回收，和调试方面都有提升</li>
-<li>接下来是通知API上的改进
-为了用户隐私去掉了ActivityManager.getRecentTasks()，ActivityManager.getAppTasks()只能得到本应用信息</li>
-<li>界面上的变化,采用了Material design</li>
-<li>添加了锁屏通知Lockscreen notifications</li>
-<li>WebView 升级到 Chromium M36，可以支持（ WebAudio, WebGL, and WebRTC）</li>
-<li>绘图的变化。支持OpenGL ES 3.1</li>
-<li>媒体方面变化。Camera API变化 AudioTrack API变化 MediaController变化</li>
-<li>存储方面的变化</li>
-<li>网络传输变化</li>
-<li>蓝牙广播</li>
-<li>NFC提升</li>
-<li>电池效率</li>
-<li>电池使用测量的开发工具</li>
-</ul>
-
 ]]></content>
   </entry>
   

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: docker | Pangff's Blog]]></title>
   <link href="http://www.pffair.com/blog/categories/docker/atom.xml" rel="self"/>
   <link href="http://www.pffair.com/"/>
-  <updated>2021-05-04T23:22:25+08:00</updated>
+  <updated>2021-05-11T15:40:50+08:00</updated>
   <id>http://www.pffair.com/</id>
   <author>
     <name><![CDATA[pangff]]></name>
@@ -12,6 +12,160 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[harbor v2.2.1安装及配置]]></title>
+    <link href="http://www.pffair.com/blog/2021/05/11/harbor-v2-dot-2-1an-zhuang-ji-pei-zhi/"/>
+    <updated>2021-05-11T15:30:09+08:00</updated>
+    <id>http://www.pffair.com/blog/2021/05/11/harbor-v2-dot-2-1an-zhuang-ji-pei-zhi</id>
+    <content type="html"><![CDATA[<p>记录下SLB（https-http)->docker-nginx->harbor-nginx->harbor的配置过程 harbor版本v2.2.1</p>
+
+<!--more-->
+
+
+<p>下载安装包</p>
+
+<pre><code>wget https://github.com/goharbor/harbor/releases/download/v2.2.1/harbor-online-installer-v2.2.1.tgz
+</code></pre>
+
+<p>解压缩</p>
+
+<pre><code>tar -xvf harbor-online-installer-v2.2.1.tgz
+</code></pre>
+
+<p>进入harbor目录</p>
+
+<pre><code>cd harbor
+</code></pre>
+
+<p>修改harbor.yml配置文件(hostname，注释https，修改密码)</p>
+
+<pre><code># Configuration file of Harbor
+
+# The IP address or hostname to access admin UI and registry service.
+# DO NOT use localhost or 127.0.0.1, because Harbor needs to be accessed by external clients.
+hostname: host
+# http related config
+http:
+  # port for http, default is 80. If https enabled, this port will redirect to https port
+  port: 80
+  relativeurls: true
+# https related config
+# https:
+#   # https port for harbor, default is 443
+#   port: 443
+#   # The path of cert and key files for nginx
+#   certificate: /your/certificate/path
+#   private_key: /your/private/key/path
+
+# internal_tls:
+#   # set enabled to true means internal tls is enabled
+#   enabled: true
+#   # put your cert and key files on dir
+#   dir: /etc/harbor/tls/internal
+
+# Uncomment external_url if you want to enable external proxy
+# And when it enabled the hostname will no longer used
+  external_url: https://host
+</code></pre>
+
+<p>由于前置nginx的反向代理，因此需要增加 relativeurls: true  、 external_url 配置</p>
+
+<p>运行安装脚本</p>
+
+<pre><code>./install.sh
+</code></pre>
+
+<p>安装过程中会自动在根创建docker-compose.yml文件并启动相应的container。因为我们之前 已有一个名字是nginx的容器，启动时会报错，提示nginx名称已被其他容器使用。 我们将相关启动容器停止，进行docker-compose.yml文件修改</p>
+
+<h3>停止相关容器</h3>
+
+<pre><code>docker-compose down -v
+</code></pre>
+
+<h4>修改harbor/docker-compose.yml</h4>
+
+<p>修改nginxl配置</p>
+
+<pre><code>proxy:
+  image: goharbor/nginx-photon:v2.2.1 container_name: harbor-nginx (nginx改成harbor-nginx) restart: always
+   ....
+  ports:
+    - 9000:8080 端口也改下，80:8080改成9000:8080因为公共nginx已经使用80了
+</code></pre>
+
+<p>因为我们已经有了公共的nginx代理服务，所以并不打算直接从外部访问 harbor的nginx代理， 而是通过公共的nginx服务反响代理到harbor-nginx的 proxy。如果要在公共nginx中可以通过容 器名称直接访问到harbor-nginx，那么就需要他们都在同一个网络环境内，所以修改docker- compose.yml文件的网络名称为公共nginx对应网络名称，并配置使用外部网络</p>
+
+<p>修改网络配置</p>
+
+<pre><code>networks:
+  ds-netwrok: (harbor名字改成了ds-network。docker-compose.yml其他部分使用了harbor网络的都要改成ds-network)
+    external: true (false 改成 true代表使用外部已有的网络而不是再创建)
+</code></pre>
+
+<h4>修改registry config</h4>
+
+<p>common/config/registry/config.yml http下增加 relativeurls配置</p>
+
+<pre><code>http:
+  relativeurls: true
+</code></pre>
+
+<h4>修改nginx配置</h4>
+
+<p>common/config/nginx/nginx.conf ，所有配置中注释以下语句</p>
+
+<pre><code> proxy_set_header X-Forwarded-Proto $scheme;
+</code></pre>
+
+<h4>修改core env</h4>
+
+<p>common/config/core/env</p>
+
+<pre><code>EXT_ENDPOINT=http://host
+</code></pre>
+
+<p>改为</p>
+
+<pre><code>
+EXT_ENDPOINT=https://host
+</code></pre>
+
+<h4>启动容器</h4>
+
+<pre><code>docker-compose up -d
+</code></pre>
+
+<h3>前置nginx反向代理的配置(因为前面还有SLB负载均衡，SLB做了443到服务器80的监听配置，并前置了SSL证书，所以这里只需要80)</h3>
+
+<pre><code>server {
+    listen 80;
+    server_name host;
+    client_max_body_size 100M;
+    location / {
+        resolver 127.0.0.11 ipv6=off;
+        set $service_upstream "http://harbor-nginx:8080";
+        proxy_set_header  Host              $http_host;
+        proxy_set_header  X-Real-IP         $remote_addr;
+        proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header  X-Forwarded-Proto $scheme;
+
+        proxy_buffering off;
+        proxy_request_buffering off;
+
+        # Fix the "It appears that your reverse proxy set up is broken" error.
+        # proxy_read_timeout  90;
+        proxy_pass $service_upstream;
+    }
+
+    error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+        root   /usr/share/nginx/html;
+    }
+}
+</code></pre>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[logspout-redis-elk]]></title>
@@ -685,110 +839,6 @@ docker swarm join \
 <p>完整脚本参考<a href="https://github.com/pangff/docker-swarm-sh/blob/master/scripts/dm-swarm.sh">dm-swarm.sh</a></p>
 
 <p><a href="http://www.pffair.com/blog/2017/01/12/elk-docker/">后续，部署ELK，并指定ELK中 elasticsearch部署到指定的es-swarm-2节点 >>></a></p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[安装docker到ECS]]></title>
-    <link href="http://www.pffair.com/blog/2017/01/11/docker-on-ecs/"/>
-    <updated>2017-01-11T16:48:04+08:00</updated>
-    <id>http://www.pffair.com/blog/2017/01/11/docker-on-ecs</id>
-    <content type="html"><![CDATA[<p>本文不采用阿里云管理平台的配置，安装docker到ECS</p>
-
-<!--more-->
-
-
-<h3>准备工作</h3>
-
-<p>购买一台阿里ECS，只是为了测试可以使用按量付费并最低配置,系统ubuntu 16.04。注意版本很重要，docker有限支持ubuntu的版本，命名为es-swarm-1</p>
-
-<h3>安装docker</h3>
-
-<p>安装参考<a href="https://docs.docker.com/engine/installation/linux/ubuntulinux/">Install Docker on Ubuntu</a> (当然也可以通过docker-machine去安装)，本文采用<a href="https://docs.docker.com/engine/installation/linux/ubuntulinux/">Install Docker on Ubuntu</a>方式。</p>
-
-<p>购买启动后，ssh到购买的ECS上</p>
-
-<pre><code>ssh root@xxx.xxx.xxx.xxx
-</code></pre>
-
-<p>更新APT ，确保APT使用https方法，并且已安装CA证书</p>
-
-<pre><code>$ sudo apt-get update
-$ sudo apt-get install apt-transport-https ca-certificates
-</code></pre>
-
-<p>添加新的GPG密钥</p>
-
-<pre><code>$ sudo apt-key adv \
-               --keyserver hkp://ha.pool.sks-keyservers.net:80 \
-               --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-</code></pre>
-
-<p>配置docker资源库。“deb <a href="https://apt.dockerproject.org/repo">https://apt.dockerproject.org/repo</a> ubuntu-xenial main” 部分根据根据不同Ubuntu系统版本使用不同配置</p>
-
-<pre><code>$ echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" | sudo tee /etc/apt/sources.list.d/docker.list
-</code></pre>
-
-<p>更新APT</p>
-
-<pre><code>$ sudo apt-get update 
-</code></pre>
-
-<p>在这步会出错，因为阿里将<a href="https://apt.dockerproject.org/repo">https://apt.dockerproject.org/repo</a> 定向到了<a href="http://mirrors.aliyun.com/">http://mirrors.aliyun.com/</a> 。</p>
-
-<p>解决方法：</p>
-
-<ul>
-<li>将 /etc/apt/apt.conf
-里 Acquire::<a href="http::Proxy">http::Proxy</a> &ldquo;<a href="http://mirrors.aliyun.com/">http://mirrors.aliyun.com/</a>&rdquo;; 注释掉</li>
-<li>当然也可以配置到阿里的镜像源，速度快还省流量，具体没有实践</li>
-</ul>
-
-
-<p>配置完成后再次更新APT</p>
-
-<pre><code>$ sudo apt-get update 
-</code></pre>
-
-<p>验证下APT是否从正确镜像库拉取</p>
-
-<pre><code>$  apt-cache policy docker-engine
-
- docker-engine:
-    Installed: 1.12.2-0~trusty
-    Candidate: 1.12.2-0~trusty
-    Version table:
-   *** 1.12.2-0~trusty 0
-          500 https://apt.dockerproject.org/repo/ ubuntu-trusty/main amd64 Packages
-          100 /var/lib/dpkg/status
-       1.12.1-0~trusty 0
-          500 https://apt.dockerproject.org/repo/ ubuntu-trusty/main amd64 Packages
-       1.12.0-0~trusty 0
-          500 https://apt.dockerproject.org/repo/ ubuntu-trusty/main amd64 Packages
-</code></pre>
-
-<p>对于Ubuntu Trusty，Wily和Xenial，使用aufs存储驱动程序需要安装linux-image-extra- *内核包。</p>
-
-<pre><code>$ sudo apt-get update
-$ sudo apt-get install linux-image-extra-$(uname -r) linux-image-extra-virtual
-</code></pre>
-
-<p>终于可以安装docker了，安装最新版本</p>
-
-<pre><code>$ sudo apt-get update
-$ sudo apt-get install docker-engine
-$ sudo service docker start
-</code></pre>
-
-<p>自己跑一个image测试下，docker安装完成，<a href="http://www.baidu.com">后面进行两台ECS实现docker swarm mode</a></p>
-
-<ul>
-<li>es-swarm-1(manager)</li>
-<li>es-swarm-2(worker)</li>
-</ul>
-
-
-<p><a href="http://www.pffair.com/blog/2017/01/11/ecs-docker-swarm/">ECS docker swarm mode  >>></a></p>
 ]]></content>
   </entry>
   
